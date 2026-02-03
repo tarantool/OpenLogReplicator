@@ -24,9 +24,10 @@
 - separate linking for `nnz` lib — в upstream 1.9.0 линковка `nnz` работает корректно, разделение на `nnz`/`nnz19` не требуется,
   как было сделано в `1.8.7-x`
 
-### Добавлено
+### Добавлено (перенесено из 1.8.7-x)
 
 - `docs`: описание pipeline of work как форка
+- `feat(build)`: conditional compilation для SO_REUSEPORT — cherry-picked из `1.8.7-x`
 
 ---
 
