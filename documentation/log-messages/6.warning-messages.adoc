@@ -185,3 +185,7 @@ Remediation: Verify XML content and source XML dictionary metadata.
 
 DDL-related system data is malformed or unexpected.
 Remediation: Inspect raw DDL records and source metadata; report if reproducible.
+
+==== code 60038, "experimental feature is used, <feature-name>:<feature-description>"
+
+Message is printed to the log indicating usage of some experimental feature.

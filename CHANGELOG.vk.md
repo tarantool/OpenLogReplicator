@@ -27,7 +27,10 @@
 ### Добавлено (перенесено из 1.8.7-x)
 
 - `docs`: описание pipeline of work как форка
-- `feat(build)`: conditional compilation для SO_REUSEPORT — cherry-picked из `1.8.7-x`
+- `feat(build)`: conditional compilation для SO_REUSEPORT
+- **ASM (Automatic Storage Management) поддержка**
+  - `feat(asm)`: ASM Replicator — чтение данных напрямую из ASM
+  - `feat(reader)`: network asm reader для ASM (asm)
 
 ---
 

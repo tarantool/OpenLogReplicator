@@ -20,16 +20,13 @@ If not, see <http://www.gnu.org/licenses/>. */
 #ifndef REPLICATOR_H_
 #define REPLICATOR_H_
 
-#include <fstream>
 #include <queue>
 #include <set>
-#include <unordered_map>
 #include <vector>
 
 #include "../common/Ctx.h"
-#include "../common/RedoLogRecord.h"
 #include "../common/Thread.h"
-#include "../common/exception/RedoLogException.h"
+#include "../common/types/Seq.h"
 
 namespace OpenLogReplicator {
     class Parser;

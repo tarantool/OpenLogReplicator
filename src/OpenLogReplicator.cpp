@@ -69,6 +69,7 @@ If not, see <http://www.gnu.org/licenses/>. */
 
 #ifdef LINK_LIBRARY_OCI
 #include "replicator/ReplicatorOnline.h"
+#include "replicator/ReplicatorOnlineASM.h"
 #endif /* LINK_LIBRARY_OCI */
 
 #ifdef LINK_LIBRARY_PROTOBUF
@@ -500,16 +501,19 @@ namespace OpenLogReplicator {
                     "log-archive-format",
                     "log-timezone",
                     "password",
+                    "password-asm",
                     "path-mapping",
                     "redo-copy-path",
                     "redo-log",
                     "server",
+                    "server-asm",
                     "start-scn",
                     "start-seq",
                     "start-time",
                     "start-time-rel",
                     "type",
-                    "user"
+                    "user",
+                    "user-asm"
                 };
                 Ctx::checkJsonFields(configFileName, readerJson, readerNames);
             }
@@ -956,6 +960,44 @@ namespace OpenLogReplicator {
 #else
                 throw ConfigurationException(30001, "bad JSON, invalid \"type\" value: " + readerType +
                                              ", expected: not \"online\" since the code is not compiled");
+#endif /*LINK_LIBRARY_OCI*/
+            } else if (readerType == "asm") {
+#ifdef LINK_LIBRARY_OCI
+                ctx->warning(60038, "experimental feature is used, ASM: read redo logs using ASM");
+
+                const std::string user = Ctx::getJsonFieldS(configFileName, Ctx::JSON_USERNAME_LENGTH, readerJson, "user");
+                const std::string password = Ctx::getJsonFieldS(configFileName, Ctx::JSON_PASSWORD_LENGTH, readerJson, "password");
+                const std::string server = Ctx::getJsonFieldS(configFileName, Ctx::JSON_SERVER_LENGTH, readerJson, "server");
+                bool keepConnection = false;
+
+                const std::string userASM = Ctx::getJsonFieldS(configFileName, Ctx::JSON_USERNAME_LENGTH, readerJson, "user-asm");
+                const std::string passwordASM = Ctx::getJsonFieldS(configFileName, Ctx::JSON_PASSWORD_LENGTH, readerJson, "password-asm");
+                const std::string serverASM = Ctx::getJsonFieldS(configFileName, Ctx::JSON_SERVER_LENGTH, readerJson, "server-asm");
+
+                if (sourceJson.HasMember("arch")) {
+                    const std::string arch = Ctx::getJsonFieldS(configFileName, Ctx::JSON_PARAMETER_LENGTH, sourceJson, "arch");
+
+                    if (arch == "path")
+                        archGetLog = Replicator::archGetLogPath;
+                    else if (arch == "online") {
+                        archGetLog = ReplicatorOnline::archGetLogOnline;
+                    } else if (arch == "online-keep") {
+                        archGetLog = ReplicatorOnline::archGetLogOnline;
+                        keepConnection = true;
+                    } else
+                        throw ConfigurationException(30001, "bad JSON, invalid \"arch\" value: " + arch +
+                                                     ", expected: one of {\"path\", \"online\", \"online-keep\"}");
+                } else
+                    archGetLog = ReplicatorOnline::archGetLogOnline;
+
+
+                replicator = new ReplicatorOnlineASM(ctx, archGetLog, builder, metadata, transactionBuffer, alias, name, user, password, server, keepConnection, userASM, passwordASM, serverASM);
+                builder->initialize();
+                replicator->initialize();
+                mainProcessMapping(readerJson);
+#else
+                throw ConfigurationException(30001, "bad JSON, invalid \"type\" value: " + readerType +
+                             ", expected: not \"asm\" since the code is not compiled");
 #endif /*LINK_LIBRARY_OCI*/
             } else if (readerType == "offline") {
                 replicator = new Replicator(ctx, archGetLog, builder, metadata, transactionBuffer, alias, name);

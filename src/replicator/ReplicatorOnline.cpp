@@ -1584,7 +1584,7 @@ namespace OpenLogReplicator {
             }
 
             stmt.createStatement(SQL_GET_ARCHIVE_LOG_LIST);
-            stmt.bindUInt(1, replicator->metadata->sequence);
+            stmt.bindUInt(1, (reinterpret_cast<ReplicatorOnline*>(replicator))->metadata->sequence);
             stmt.bindUInt(2, replicator->metadata->resetlogs);
 
             std::array < char, 513 > path{};

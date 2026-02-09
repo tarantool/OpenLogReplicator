@@ -29,7 +29,7 @@ namespace OpenLogReplicator {
     class DatabaseEnvironment;
     class Schema;
 
-    class ReplicatorOnline final : public Replicator {
+    class ReplicatorOnline : public Replicator {
     protected:
         static constexpr std::string_view SQL_GET_ARCHIVE_LOG_LIST
         {

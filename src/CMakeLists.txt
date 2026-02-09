@@ -76,6 +76,7 @@ list(APPEND ListParser
 
 list(APPEND ListReader
         reader/Reader.cpp
+        reader/ReaderASM.cpp
         reader/ReaderFilesystem.cpp)
 
 list(APPEND ListMetadata
@@ -99,6 +100,7 @@ if (WITH_OCI)
             replicator/DatabaseConnection.cpp
             replicator/DatabaseEnvironment.cpp
             replicator/DatabaseStatement.cpp
+            replicator/ReplicatorOnlineASM.cpp
             replicator/ReplicatorOnline.cpp)
 endif ()
 
