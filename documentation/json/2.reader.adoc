@@ -31,6 +31,7 @@ Reads online and archived redo logs and connects to the database for metadata.
 Will attempt reconnects if the DB connection is lost.
 * `offline` — Uses metadata from an existing checkpoint; no DB connection required.
 * `batch` — Processes an explicit list of redo log files and then exits.
+* `asm` — Like `online`, but online redo logs are read directly from ASM instance via file descriptors.
 
 _IMPORTANT:_ `batch` is intended for testing and troubleshooting.
 Checkpoint files created by `batch` may not contain a complete schema suitable for `online` or `offline` runs.
@@ -69,7 +70,15 @@ Can also be set via the environment variable `OLR_LOG_TIMEZONE`.
 
 |`password`
 |_string_, max length: 128
-|Database password for `online` mode.
+|Database password for `online` and `asm` modes.
+
+_CAUTION:_ Stored in plaintext in the configuration file.
+
+|`password-asm`
+|_string_, max length: 128
+|Password for connecting to ASM instance.
+
+_NOTE:_ Valid only for `asm` type.
 
 _CAUTION:_ Stored in plaintext in the configuration file.
 
@@ -97,7 +106,13 @@ _NOTE:_ Only valid for `batch` type.
 |_string_, max length: 4096
 |Database connect string in the form `//<host>:<port>/<service>`.
 
-_NOTE:_ Required for `online` readers.
+_NOTE:_ Required for `online` and `asm` readers.
+
+|`server-asm` [[server-asm]]
+|_string_, max length: 4096
+|Connect string for ASM instance in the form `//<host>:<port>/<service>`.
+
+_NOTE:_ Valid only for `asm` type.
 
 |`start-scn`
 |_integer_, min: 0
@@ -126,9 +141,15 @@ _NOTE:_ Only valid for `online` type and mutually exclusive with `start-scn` and
 
 |`user`
 |_string_, max length: 128
-|Database username for `online` mode.
+|Database username for `online` and `asm` modes.
 
-_NOTE:_ Valid only for `online` type.
+_NOTE:_ Valid only for `online` and `asm` types.
+
+|`user-asm`
+|_string_, max length: 128
+|Username for connecting to ASM instance.
+
+_NOTE:_ Valid only for `asm` type.
 
 |`transaction-max-mb`
 |_integer_, min: 0, default: 0

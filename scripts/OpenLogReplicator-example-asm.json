@@ -1,0 +1,66 @@
+{
+  "version": "1.9.0",
+  "state": {
+    "type": "disk",
+    "path": "../checkpoint"
+  },
+  "metrics": {
+    "type": "prometheus",
+    "bind": "0.0.0.0:8080"
+  },
+  "source": [
+    {
+      "alias": "S1",
+      "name": "XE",
+      "flags": 4096,
+      "reader": {
+        "type": "asm",
+        "user": "dbzuser",
+        "password": "dbz",
+        "server": "//localhost:1522/ORCL",
+        "user-asm": "sys",
+        "password-asm": "mysecurepassword",
+        "server-asm": "//localhost:1522/+ASM"
+      },
+      "state": {
+        "type": "disk",
+        "path": "../checkpoint"
+      },
+      "format": {
+        "type": "json",
+        "db": 3,
+        "column": 2,
+        "interval-dts": 9,
+        "interval-ytm": 4,
+        "message": 2,
+        "rid": 1,
+        "schema": 7,
+        "scn-type": 5,
+        "timestamp-type": 4,
+        "flush-buffer": 0
+      },
+      "filter": {
+        "table": [
+          {
+            "owner": "USR1",
+            "table": ".*"
+          }
+        ]
+      }
+    }
+  ],
+  "target": [
+    {
+      "alias": "K1",
+      "source": "S1",
+      "writer": {
+        "type": "file",
+        "output": "output-%t.json",
+        "new-line": 1,
+        "max-file-size": 1073741824,
+        "append": 0,
+        "write-buffer-flush-size": 0
+      }
+    }
+  ]
+}
