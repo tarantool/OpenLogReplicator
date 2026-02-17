@@ -65,7 +65,7 @@ namespace OpenLogReplicator {
          * Parameters:
          * - i - file descriptor (IN)
          * - j - offset in block (IN)
-         * - k - count of blocks to read (IN)
+         * - k - count of bytes to read (IN)
          * - l - pointer to byte array where data is written
          */
         static constexpr std::string_view SQL_ASM_READ{"BEGIN dbms_diskgroup.read(:i, :j, :k, :l); END;"};
