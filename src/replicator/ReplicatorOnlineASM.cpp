@@ -22,7 +22,9 @@ along with OpenLogReplicator; see the file LICENSE;  If not see
 
 #include <unistd.h>
 #include <utility>
+#include <string>
 #include "../reader/ReaderASM.h"
+#include "../reader/ReaderUdev.h"
 #include "../metadata/Metadata.h"
 #include "../metadata/RedoLog.h"
 #include "../metadata/Schema.h"
@@ -36,18 +38,23 @@ namespace OpenLogReplicator {
                                              std::string newDatabase, std::string newUser,
                                              std::string newPassword, std::string newConnectString,
                                              bool newKeepConnection, std::string userASM, std::string passwdASM,
-                                             std::string connectStringASM) : ReplicatorOnline(
+                                             std::string connectStringASM, bool newUseUdev) : ReplicatorOnline(
         newCtx, newArchGetLog, newBuilder, newMetadata, newTransactionBuffer, std::move(newAlias),
         std::move(newDatabase), std::move(newUser), std::move(newPassword), std::move(newConnectString),
-        newKeepConnection) {
-        connASM = new DatabaseConnection(env, std::move(userASM), std::move(passwdASM), std::move(connectStringASM),
-                                         true);
+        newKeepConnection), useUdev(newUseUdev) {
+        connASM = new DatabaseConnection(env, userASM, passwdASM, connectStringASM, true);
+        connASMMeta = new DatabaseConnection(env, userASM, passwdASM, connectStringASM, true);
     }
 
     ReplicatorOnlineASM::~ReplicatorOnlineASM() {
         if (connASM != nullptr) {
             delete connASM;
             connASM = nullptr;
+        }
+
+        if (connASMMeta != nullptr) {
+            delete connASMMeta;
+            connASMMeta = nullptr;
         }
     }
 
@@ -61,6 +68,7 @@ namespace OpenLogReplicator {
         }
 
         while (!ctx->softShutdown) {
+            // Connect main ASM connections if not connected
             if (!connASM->connected) {
                 try {
                     connASM->connect();
@@ -69,8 +77,18 @@ namespace OpenLogReplicator {
                 }
             }
 
-            if (connASM->connected)
+            // Connect metadata connection separately (for ReaderUdev)
+            if (!connASMMeta->connected) {
+                try {
+                    connASMMeta->connect();
+                } catch (RuntimeException& ex) {
+                    ctx->error(ex.code, ex.msg);
+                }
+            }
+
+            if (connASM->connected) {
                 return true;
+            }
 
             if (connASM->connected) {
                 try {
@@ -113,17 +131,26 @@ namespace OpenLogReplicator {
             }
         }
 
-        auto* readerASM = new ReaderASM(ctx, alias + "-reader-" + std::to_string(group), this, database, group,
-                                              metadata->dbBlockChecksum != "OFF" && metadata->dbBlockChecksum != "FALSE");
+        Reader* reader;
+        if (useUdev) {
+            reader = new ReaderUdev(ctx, alias + "-reader-" + std::to_string(group), this, database, group,
+                                           metadata->dbBlockChecksum != "OFF" && metadata->dbBlockChecksum != "FALSE");
+        } else {
+            reader = new ReaderASM(ctx, alias + "-reader-" + std::to_string(group), this, database, group,
+                                           metadata->dbBlockChecksum != "OFF" && metadata->dbBlockChecksum != "FALSE");
+        }
 
-        readers.insert(readerASM);
-        readerASM->initialize();
+        readers.insert(reader);
+        reader->initialize();
 
-        ctx->spawnThread(readerASM);
-        return readerASM;
+        ctx->spawnThread(reader);
+        return reader;
     }
 
     std::string ReplicatorOnlineASM::getModeName() const {
-        return "ASM";
+        if (useUdev) {
+            return {"ASM-UDEV"};
+        }
+        return {"ASM"};
     }
 }

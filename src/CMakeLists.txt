@@ -77,7 +77,8 @@ list(APPEND ListParser
 list(APPEND ListReader
         reader/Reader.cpp
         reader/ReaderASM.cpp
-        reader/ReaderFilesystem.cpp)
+        reader/ReaderFilesystem.cpp
+        reader/ReaderUdev.cpp)
 
 list(APPEND ListMetadata
         metadata/Checkpoint.cpp

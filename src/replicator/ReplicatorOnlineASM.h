@@ -21,8 +21,11 @@ along with OpenLogReplicator; see the file LICENSE;  If not see
 #define REPLICATOR_ONLINE_ASM_H_
 
 #include "ReplicatorOnline.h"
+#include <mutex>
 
 namespace OpenLogReplicator {
+    class DatabaseEnvironment;
+
     class ReplicatorOnlineASM final : public ReplicatorOnline {
     protected:
         std::string getModeName() const override;
@@ -31,15 +34,47 @@ namespace OpenLogReplicator {
 
         Reader* readerCreate(int group) override;
 
+        /**
+         * @brief Flag to use direct block device access via ReaderUdev instead of ReaderASM.
+         *
+         * When true, the replicator will create ReaderUdev instances that bypass
+         * the ASM instance and read directly from underlying block devices using
+         * extent mapping. This can provide better performance and independence
+         * from ASM instance load, but requires appropriate OS-level permissions.
+         */
+        bool useUdev;
+
     public:
         DatabaseConnection* connASM;
+
+        /**
+         * @brief Dedicated metadata connection to ASM instance.
+         *
+         * Separate connection used for querying ASM metadata views and tables
+         * (v$asm_diskgroup, v$asm_disk, v$asm_file, x$kffxp, etc.). This allows
+         * ReaderUdev to query extent mappings without interfering with ongoing
+         * I/O operations on the primary connection. Thread-safe access is
+         * protected by connASMMetaMutex.
+         */
+        DatabaseConnection* connASMMeta;
+
+        /**
+         * @brief Mutex protecting thread-safe access to connASMMeta.
+         *
+         * OCI database connections are not thread-safe. This mutex ensures that
+         * ReaderUdev can safely execute metadata queries from its own thread
+         * without conflicting with other operations.
+         */
+        std::mutex connASMMetaMutex;
 
         ReplicatorOnlineASM(Ctx* newCtx, void (*newArchGetLog)(Replicator* replicator), Builder* newBuilder,
                             Metadata* newMetadata,
                             TransactionBuffer* newTransactionBuffer, std::string newAlias, std::string newDatabase,
                             std::string newUser,
                             std::string newPassword, std::string newConnectString, bool newKeepConnection,
-                            std::string userASM, std::string passwdASM, std::string connectStringASM);
+                            std::string userASM, std::string passwdASM, std::string connectStringASM,
+                            bool newUseUdev = false);
+
 
         ~ReplicatorOnlineASM() override;
     };
