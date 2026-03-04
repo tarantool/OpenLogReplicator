@@ -44,6 +44,8 @@ namespace OpenLogReplicator {
          */
         bool useUdev;
 
+        bool getArchivelogFromFS;
+
     public:
         DatabaseConnection* connASM;
 
@@ -68,11 +70,10 @@ namespace OpenLogReplicator {
         std::mutex connASMMetaMutex;
 
         ReplicatorOnlineASM(Ctx* newCtx, void (*newArchGetLog)(Replicator* replicator), Builder* newBuilder,
-                            Metadata* newMetadata,
-                            TransactionBuffer* newTransactionBuffer, std::string newAlias, std::string newDatabase,
-                            std::string newUser,
-                            std::string newPassword, std::string newConnectString, bool newKeepConnection,
-                            std::string userASM, std::string passwdASM, std::string connectStringASM,
+                            Metadata* newMetadata, TransactionBuffer* newTransactionBuffer, std::string newAlias,
+                            std::string newDatabase, std::string newUser, std::string newPassword,
+                            std::string newConnectString, bool newKeepConnection, std::string userASM,
+                            std::string passwdASM, std::string connectStringASM, bool getArchivelogFromFS,
                             bool newUseUdev = false);
 
 

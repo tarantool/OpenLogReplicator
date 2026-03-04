@@ -41,6 +41,7 @@
   - `feat(reader)`: direct block device reader для ASM (asm-udev)
   - `doc(asm)`: документация по параметрам ASM
   - `doc(asm)`: документация ASM классов
+  - `feat(archivelogs)`: настройка гибридного чтения архивных логов, возможность чтения архивных логов на ASM или из ФС
 
 - **Скрипты и сборка**
   - `feat(scripts)`: conditional compilation для SO_REUSEPORT
@@ -58,9 +59,7 @@
   - `feat(reader)`: direct block device reader для ASM (asm-udev)
   - `doc(asm)`: документация по параметрам ASM
   - `doc(asm)`: документация ASM классов
-
-- **Archivelogs**
-  - `feat(archivelogs)`: hybrid reading of archivelogs — гибридное чтение архивных логов
+  - `feat(archivelogs)`: настройка гибридного чтения архивных логов, возможность чтения архивных логов на ASM или из ФС
 
 - **Форматирование вывода**
   - `feat`: параметр `timestamp-tm-val` для вывода времени коммита транзакции

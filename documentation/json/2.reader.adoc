@@ -31,7 +31,7 @@ Reads online and archived redo logs and connects to the database for metadata.
 Will attempt reconnects if the DB connection is lost.
 * `offline` — Uses metadata from an existing checkpoint; no DB connection required.
 * `batch` — Processes an explicit list of redo log files and then exits.
-* `asm` — Like `online`, but online redo logs are read directly from ASM instance via file descriptors.
+* `asm` — Like `online`, but online and archived redo logs are read directly from ASM instance via file descriptors.
 
 _IMPORTANT:_ `batch` is intended for testing and troubleshooting.
 Checkpoint files created by `batch` may not contain a complete schema suitable for `online` or `offline` runs.

@@ -25,6 +25,7 @@ along with OpenLogReplicator; see the file LICENSE;  If not see
 #include <string>
 #include "../reader/ReaderASM.h"
 #include "../reader/ReaderUdev.h"
+#include "../reader/ReaderFilesystem.h"
 #include "../metadata/Metadata.h"
 #include "../metadata/RedoLog.h"
 #include "../metadata/Schema.h"
@@ -38,10 +39,11 @@ namespace OpenLogReplicator {
                                              std::string newDatabase, std::string newUser,
                                              std::string newPassword, std::string newConnectString,
                                              bool newKeepConnection, std::string userASM, std::string passwdASM,
-                                             std::string connectStringASM, bool newUseUdev) : ReplicatorOnline(
-        newCtx, newArchGetLog, newBuilder, newMetadata, newTransactionBuffer, std::move(newAlias),
-        std::move(newDatabase), std::move(newUser), std::move(newPassword), std::move(newConnectString),
-        newKeepConnection), useUdev(newUseUdev) {
+                                             std::string connectStringASM, bool getArchivelogFromFS, bool newUseUdev) :
+    ReplicatorOnline(newCtx, newArchGetLog, newBuilder, newMetadata, newTransactionBuffer,
+        std::move(newAlias), std::move(newDatabase), std::move(newUser),
+        std::move(newPassword), std::move(newConnectString), newKeepConnection),
+    useUdev(newUseUdev), getArchivelogFromFS(getArchivelogFromFS) {
         connASM = new DatabaseConnection(env, userASM, passwdASM, connectStringASM, true);
         connASMMeta = new DatabaseConnection(env, userASM, passwdASM, connectStringASM, true);
     }
@@ -132,12 +134,18 @@ namespace OpenLogReplicator {
         }
 
         Reader* reader;
-        if (useUdev) {
-            reader = new ReaderUdev(ctx, alias + "-reader-" + std::to_string(group), this, database, group,
-                                           metadata->dbBlockChecksum != "OFF" && metadata->dbBlockChecksum != "FALSE");
+
+        if (group == 0 && getArchivelogFromFS) {
+            reader = new ReaderFilesystem(ctx, alias + "-reader-" + std::to_string(group), database, group,
+                                   metadata->dbBlockChecksum != "OFF" && metadata->dbBlockChecksum != "FALSE");
         } else {
-            reader = new ReaderASM(ctx, alias + "-reader-" + std::to_string(group), this, database, group,
-                                           metadata->dbBlockChecksum != "OFF" && metadata->dbBlockChecksum != "FALSE");
+            if (useUdev) {
+                reader = new ReaderUdev(ctx, alias + "-reader-" + std::to_string(group), this, database, group,
+                                                   metadata->dbBlockChecksum != "OFF" && metadata->dbBlockChecksum != "FALSE");
+            } else {
+                reader = new ReaderASM(ctx, alias + "-reader-" + std::to_string(group), this, database, group,
+                                                   metadata->dbBlockChecksum != "OFF" && metadata->dbBlockChecksum != "FALSE");
+            }
         }
 
         readers.insert(reader);

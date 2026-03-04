@@ -48,10 +48,17 @@ _WARNING:_ Do not change this value while using existing checkpoint files; misma
 
 * `online` — read archive list from the database (connection opened as needed).
 * `online-keep` — keep the database connection open.
-* `path` — read archive filenames from a filesystem path.
+* `path` — read archive filenames from a filesystem path. Gets archive logs from `db_recovery_file_dest/<DB_NAME>/archivelog` path.
 * `list` — use a user-provided file list (commonly used with `batch` reader).
 
 _NOTE:_ Only valid for readers that support archived redo logs.
+
+|`archivelog-getting-type`
+|_string_, allowed: `online`, `filesystem`, default: `online`
+|Type of reader to use for reading archive log files (only applies to `asm` reader type).
+
+* `filesystem` — read archive logs from filesystem as regular files. Use when archive logs are available as normal readable files.
+* `online` — read archive logs from ASM instance. Use when archive logs are located in ASM and not available as regular files.
 
 |`arch-read-sleep-us`
 |_integer_, min: 0, default: 10000000

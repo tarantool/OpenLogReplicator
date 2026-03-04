@@ -482,7 +482,8 @@ namespace OpenLogReplicator {
                     "redo-verify-delay-us",
                     "refresh-interval-us",
                     "state",
-                    "transaction-max-mb"
+                    "transaction-max-mb",
+                    "archivelog-getting-type"
                 };
                 Ctx::checkJsonFields(configFileName, sourceJson, sourceNames);
             }
@@ -990,8 +991,22 @@ namespace OpenLogReplicator {
                 } else
                     archGetLog = ReplicatorOnline::archGetLogOnline;
 
+                bool archiveLogFromFS = false;
+                if (sourceJson.HasMember("archivelog-getting-type")) {
+                    if (const std::string archiveGettingType = Ctx::getJsonFieldS(configFileName, Ctx::JSON_PARAMETER_LENGTH, sourceJson, "archivelog-getting-type");
+                        archiveGettingType == "filesystem") {
+                        archiveLogFromFS = true;
+                        ctx->info(00000, R"(The "archivelog-getting-type" parameter is "filesystem".)");
+                        } else if (archiveGettingType == "online") {
+                            ctx->info(00000, R"(The "archivelog-getting-type" parameter is "online".)");
+                        } else {
+                            throw ConfigurationException(30001, R"(bad JSON, invalid "archivelog-getting-type" value:)" + archiveGettingType + R"(, expected: one of {"filesystem", "online"})");
+                        }
+                } else {
+                    ctx->hint(R"(The "archivelog-getting-type" parameter is not set. The parameter will be set to "online" value)");
+                }
 
-                replicator = new ReplicatorOnlineASM(ctx, archGetLog, builder, metadata, transactionBuffer, alias, name, user, password, server, keepConnection, userASM, passwordASM, serverASM);
+                replicator = new ReplicatorOnlineASM(ctx, archGetLog, builder, metadata, transactionBuffer, alias, name, user, password, server, keepConnection, userASM, passwordASM, serverASM, archiveLogFromFS);
                 builder->initialize();
                 replicator->initialize();
                 mainProcessMapping(readerJson);
@@ -1030,7 +1045,22 @@ namespace OpenLogReplicator {
                     archGetLog = ReplicatorOnline::archGetLogOnline;
                 }
 
-                replicator = new ReplicatorOnlineASM(ctx, archGetLog, builder, metadata, transactionBuffer, alias, name, user, password, server, keepConnection, userASM, passwordASM, serverASM, true);
+                bool archiveLogFromFS = false;
+                if (sourceJson.HasMember("archivelog-getting-type")) {
+                    if (const std::string archiveGettingType = Ctx::getJsonFieldS(configFileName, Ctx::JSON_PARAMETER_LENGTH, sourceJson, "archivelog-getting-type");
+                        archiveGettingType == "filesystem") {
+                        archiveLogFromFS = true;
+                        ctx->info(00000, R"(The "archivelog-getting-type" parameter is "filesystem".)");
+                        } else if (archiveGettingType == "online") {
+                            ctx->info(00000, R"(The "archivelog-getting-type" parameter is "online".)");
+                        } else {
+                            throw ConfigurationException(30001, R"(bad JSON, invalid "archivelog-getting-type" value:)" + archiveGettingType + R"(, expected: one of {"filesystem", "online"})");
+                        }
+                } else {
+                    ctx->hint(R"(The "archivelog-getting-type" parameter is not set. The parameter will be set to "online" value)");
+                }
+
+                replicator = new ReplicatorOnlineASM(ctx, archGetLog, builder, metadata, transactionBuffer, alias, name, user, password, server, keepConnection, userASM, passwordASM, serverASM, archiveLogFromFS, true);
                 builder->initialize();
                 replicator->initialize();
                 mainProcessMapping(readerJson);
