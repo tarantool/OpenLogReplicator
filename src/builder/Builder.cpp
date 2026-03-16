@@ -893,8 +893,8 @@ namespace OpenLogReplicator {
         }
     }
 
-    void Builder::processDml(Seq sequence, Scn scn, Time timestamp, LobCtx* lobCtx, const XmlCtx* xmlCtx, const std::deque<const RedoLogRecord*>& redo1,
-                             const std::deque<const RedoLogRecord*>& redo2, Format::TRANSACTION_TYPE transactionType, bool system, bool schema, bool dump) {
+    void Builder::processDml(Seq sequence, Scn scn, Time timestamp, LobCtx* lobCtx, const XmlCtx* xmlCtx, const std::deque<RedoLogRecord>& redo1,
+                             const std::deque<RedoLogRecord>& redo2, Format::TRANSACTION_TYPE transactionType, bool system, bool schema, bool dump) {
         uint8_t fb;
         typeObj obj;
         typeDataObj dataObj;
@@ -904,17 +904,17 @@ namespace OpenLogReplicator {
         const RedoLogRecord* redoLogRecord2p = nullptr;
         auto it1 = redo1.cbegin();
         auto it2 = redo2.cbegin();
-        const RedoLogRecord* redoLogRecord1 = *it1;
-        const RedoLogRecord* redoLogRecord2 = *it2;
+        const RedoLogRecord* redoLogRecord1 = &*it1;
+        const RedoLogRecord* redoLogRecord2 = &*it2;
 
         DbTable* table = metadata->schema->checkTableDict(redoLogRecord1->obj);
         if (format.isScnTypeCommitValue())
             scn = commitScn;
 
         if (transactionType == Format::TRANSACTION_TYPE::INSERT) {
-            for (const auto* it3: redo2) {
-                if ((it3->fb & RedoLogRecord::FB_F) != 0) {
-                    redoLogRecord2p = it3;
+            for (const auto& it3: redo2) {
+                if ((it3.fb & RedoLogRecord::FB_F) != 0) {
+                    redoLogRecord2p = &it3;
                     break;
                 }
             }
@@ -1255,8 +1255,8 @@ namespace OpenLogReplicator {
             if (it1 == redo1.cend() || it2 == redo2.cend())
                 break;
 
-            redoLogRecord1p = *it1;
-            redoLogRecord2p = *it2;
+            redoLogRecord1p = &*it1;
+            redoLogRecord2p = &*it2;
         }
 
         typeCol guardPos = -1;

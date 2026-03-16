@@ -1256,8 +1256,8 @@ namespace OpenLogReplicator {
                                    const RedoLogRecord* redoLogRecord2, bool system, bool schema, bool dump);
         void processDeleteMultiple(Seq sequence, Scn scn, Time timestamp, LobCtx* lobCtx, const XmlCtx* xmlCtx, const RedoLogRecord* redoLogRecord1,
                                    const RedoLogRecord* redoLogRecord2, bool system, bool schema, bool dump);
-        void processDml(Seq sequence, Scn scn, Time timestamp, LobCtx* lobCtx, const XmlCtx* xmlCtx, const std::deque<const RedoLogRecord*>& redo1,
-                        const std::deque<const RedoLogRecord*>& redo2, Format::TRANSACTION_TYPE transactionType, bool system, bool schema, bool dump);
+        void processDml(Seq sequence, Scn scn, Time timestamp, LobCtx* lobCtx, const XmlCtx* xmlCtx, const std::deque<RedoLogRecord>& redo1,
+                        const std::deque<RedoLogRecord>& redo2, Format::TRANSACTION_TYPE transactionType, bool system, bool schema, bool dump);
         void processDdl(Seq sequence, Scn scn, Time timestamp, const RedoLogRecord* redoLogRecord1);
         virtual void initialize();
         virtual void processCommit() = 0;

@@ -225,8 +225,8 @@ namespace OpenLogReplicator {
              commitSequence,  commitScn, commitTimestamp, &attributes);
 
         auto transactionType = Format::TRANSACTION_TYPE::T_NONE;
-        std::deque<const RedoLogRecord*> redo1;
-        std::deque<const RedoLogRecord*> redo2;
+        std::deque<RedoLogRecord> redo1;
+        std::deque<RedoLogRecord> redo2;
 
         const uint64_t mMax = metadata->ctx->swappedMemorySize(metadata->ctx->parserThread, xid);
         for (uint64_t m = 0; m < mMax; ++m) {
@@ -235,8 +235,16 @@ namespace OpenLogReplicator {
             for (uint64_t i = 0; i < tc->elements; ++i) {
                 typeOp2 const op = *reinterpret_cast<const typeOp2*>(tc->buffer + pos);
 
-                auto* redoLogRecord1 = reinterpret_cast<RedoLogRecord*>(tc->buffer + pos + TransactionBuffer::ROW_HEADER_DATA0);
-                auto* redoLogRecord2 = reinterpret_cast<RedoLogRecord*>(tc->buffer + pos + TransactionBuffer::ROW_HEADER_DATA1 + redoLogRecord1->size);
+                RedoLogRecord redoLogRecord1Local;
+                memcpy(&redoLogRecord1Local, tc->buffer + pos + TransactionBuffer::ROW_HEADER_DATA0, sizeof(redoLogRecord1Local));
+                redoLogRecord1Local.dataExt = tc->buffer + pos + TransactionBuffer::ROW_HEADER_DATA1;
+                auto* redoLogRecord1 = &redoLogRecord1Local;
+
+                RedoLogRecord redoLogRecord2Local;
+                memcpy(&redoLogRecord2Local, tc->buffer + pos + TransactionBuffer::ROW_HEADER_DATA1 + redoLogRecord1->size, sizeof(redoLogRecord2Local));
+                redoLogRecord2Local.dataExt = tc->buffer + pos + TransactionBuffer::ROW_HEADER_DATA2 + redoLogRecord1->size;
+                auto* redoLogRecord2 = &redoLogRecord2Local;
+
 
                 log(metadata->ctx, "flu1", redoLogRecord1);
                 log(metadata->ctx, "flu2", redoLogRecord2);
@@ -453,28 +461,28 @@ namespace OpenLogReplicator {
                                 log(metadata->ctx, "nul2", redoLogRecord2);
                                 // Ignore
                             } else {
-                                redo1.push_back(redoLogRecord1);
-                                redo2.push_back(redoLogRecord2);
+                                redo1.push_back(*redoLogRecord1);
+                                redo2.push_back(*redoLogRecord2);
                             }
                         } else {
-                            if (redo1.back()->suppLogBdba == redoLogRecord1->suppLogBdba && redo1.back()->suppLogSlot == redoLogRecord1->suppLogSlot &&
-                                redo1.front()->obj == redoLogRecord1->obj && redo2.front()->obj == redoLogRecord2->obj) {
+                            if (redo1.back().suppLogBdba == redoLogRecord1->suppLogBdba && redo1.back().suppLogSlot == redoLogRecord1->suppLogSlot &&
+                                redo1.front().obj == redoLogRecord1->obj && redo2.front().obj == redoLogRecord2->obj) {
                                 if (transactionType == Format::TRANSACTION_TYPE::INSERT) {
-                                    redo1.push_front(redoLogRecord1);
-                                    redo2.push_front(redoLogRecord2);
+                                    redo1.push_front(*redoLogRecord1);
+                                    redo2.push_front(*redoLogRecord2);
                                 } else {
-                                    if (op == 0x05010B06 && redo2.back()->opCode == 0x0B02) {
-                                        const RedoLogRecord* prev = redo1.back();
+                                    if (op == 0x05010B06 && redo2.back().opCode == 0x0B02) {
+                                        RedoLogRecord prev = redo1.back();
                                         redo1.pop_back();
-                                        redo1.push_back(redoLogRecord1);
+                                        redo1.push_back(*redoLogRecord1);
                                         redo1.push_back(prev);
                                         prev = redo2.back();
                                         redo2.pop_back();
-                                        redo2.push_back(redoLogRecord2);
+                                        redo2.push_back(*redoLogRecord2);
                                         redo2.push_back(prev);
                                     } else {
-                                        redo1.push_back(redoLogRecord1);
-                                        redo2.push_back(redoLogRecord2);
+                                        redo1.push_back(*redoLogRecord1);
+                                        redo2.push_back(*redoLogRecord2);
                                     }
                                 }
                             } else {

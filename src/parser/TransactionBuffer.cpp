@@ -183,15 +183,22 @@ namespace OpenLogReplicator {
         auto* lastTc = transaction->lastTc;
         *reinterpret_cast<typeOp2*>(lastTc->buffer + lastTc->size + ROW_HEADER_OP) = (redoLogRecord1->opCode << 16) | redoLogRecord2->opCode;
 
-        auto* redoLogRecordTarget1 = reinterpret_cast<RedoLogRecord*>(lastTc->buffer + lastTc->size + ROW_HEADER_DATA0);
-        *redoLogRecordTarget1 = *redoLogRecord1;
-        redoLogRecordTarget1->dataExt = nullptr;
+        RedoLogRecord tmp1 = *redoLogRecord1;
+        tmp1.dataExt = nullptr;
+        memcpy(lastTc->buffer + lastTc->size + ROW_HEADER_DATA0,
+                    &tmp1,
+                    sizeof(tmp1));
+
         memcpy(lastTc->buffer + lastTc->size + ROW_HEADER_DATA1, redoLogRecord1->data(), redoLogRecord1->size);
 
-        auto* redoLogRecordTarget2 = reinterpret_cast<RedoLogRecord*>(lastTc->buffer + lastTc->size + ROW_HEADER_DATA1 + redoLogRecord1->size);
-        *redoLogRecordTarget2 = *redoLogRecord2;
-        redoLogRecordTarget2->dataExt = nullptr;
+        RedoLogRecord tmp2 = *redoLogRecord2;
+        tmp2.dataExt = nullptr;
+        memcpy(lastTc->buffer + lastTc->size + ROW_HEADER_DATA1 + redoLogRecord1->size,
+            &tmp2,
+            sizeof(tmp2));
+
         memcpy(lastTc->buffer + lastTc->size + ROW_HEADER_DATA2 + redoLogRecord1->size, redoLogRecord2->data(), redoLogRecord2->size);
+
         *reinterpret_cast<typeChunkSize*>(lastTc->buffer + lastTc->size + ROW_HEADER_DATA2 + redoLogRecord1->size + redoLogRecord2->size) = chunkSize;
 
         lastTc->size += chunkSize;
