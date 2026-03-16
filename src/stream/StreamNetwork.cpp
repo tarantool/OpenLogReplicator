@@ -125,6 +125,7 @@ namespace OpenLogReplicator {
     }
 
     void StreamNetwork::sendMessage(const void* msg, uint64_t length) {
+        uint8_t lengthBuf[8];
         uint64_t sent = 0;
 
         if (socketFD == -1)
@@ -135,10 +136,18 @@ namespace OpenLogReplicator {
         FD_ZERO(&wset);
         FD_SET(socketFD, &wset);
 
-        // Header content
+        // Header content - always little endian for debezium client compatibility
+        //
+        // Example: mem address =  0x05, 0x06, 0x07, 0x08, ...
+        // byte[] msg = { 0x04, 0x00, 0x00, 0x00, ... } from Little Endian system means 4 number.
+        // Big Endian platform interprets *static_cast<const uint32_t*>(msg) like 0x04000000.
+        // It takes first four bytes and MSB (most significant byte) on lowest address and that
+        // will be int 0x04000000 (in decimal is 67108864).
+        // It should be interpreted as LSB (least significant byte) on lowest address, that
+        // will be int 0x00000004 (in decimal is 4).
         if (length < MAX_LENGTH) {
-            uint32_t length32 = length;
             // 32-bit length
+            Ctx::write32Little(lengthBuf, static_cast<uint32_t>(length));
             while (sent < sizeof(uint32_t)) {
                 if (ctx->softShutdown)
                     return;
@@ -146,7 +155,7 @@ namespace OpenLogReplicator {
                 w = wset;
                 // Blocking select
                 select(socketFD + 1, nullptr, &w, nullptr, nullptr);
-                ssize_t r = write(socketFD, reinterpret_cast<const uint8_t*>(&length32) + sent, sizeof(uint32_t) - sent);
+                ssize_t r = write(socketFD, lengthBuf + sent, sizeof(uint32_t) - sent);
                 if (r <= 0) {
                     if (r < 0 && (errno == EWOULDBLOCK || errno == EAGAIN))
                         r = 0;
@@ -161,7 +170,7 @@ namespace OpenLogReplicator {
             }
         } else {
             // 64-bit length
-            uint32_t length32 = htole32(MAX_LENGTH);
+            Ctx::write32Little(lengthBuf, MAX_LENGTH);
             while (sent < sizeof(uint32_t)) {
                 if (ctx->softShutdown)
                     return;
@@ -169,7 +178,7 @@ namespace OpenLogReplicator {
                 w = wset;
                 // Blocking select
                 select(socketFD + 1, nullptr, &w, nullptr, nullptr);
-                ssize_t r = write(socketFD, reinterpret_cast<const uint8_t*>(&length32) + sent, sizeof(uint32_t) - sent);
+                ssize_t r = write(socketFD, lengthBuf + sent, sizeof(uint32_t) - sent);
                 if (r <= 0) {
                     if (r < 0 && (errno == EWOULDBLOCK || errno == EAGAIN))
                         r = 0;
@@ -183,7 +192,7 @@ namespace OpenLogReplicator {
                 sent += r;
             }
 
-            uint32_t length64 = htole64(length);
+            Ctx::write64Little(lengthBuf, length);
             sent = 0;
             while (sent < sizeof(uint64_t)) {
                 if (ctx->softShutdown)
@@ -192,7 +201,7 @@ namespace OpenLogReplicator {
                 w = wset;
                 // Blocking select
                 select(socketFD + 1, nullptr, &w, nullptr, nullptr);
-                ssize_t r = write(socketFD, reinterpret_cast<const uint8_t*>(&length64) + sent, sizeof(uint64_t) - sent);
+                ssize_t r = write(socketFD, lengthBuf + sent, sizeof(uint64_t) - sent);
                 if (r <= 0) {
                     if (r < 0 && (errno == EWOULDBLOCK || errno == EAGAIN))
                         r = 0;
@@ -254,7 +263,8 @@ namespace OpenLogReplicator {
             }
         }
 
-        uint64_t length = le32toh(*static_cast<const uint32_t*>(msg));
+        // Read length as little endian (little endian client compatibility)
+        uint64_t length = Ctx::read32Little(static_cast<const uint8_t*>(msg));
         if (length < MAX_LENGTH) {
             // 32-bit message length
             if (bufferSize < length)
@@ -285,7 +295,7 @@ namespace OpenLogReplicator {
                 }
             }
 
-            length = le64toh(*static_cast<const uint32_t*>(msg));
+            length = Ctx::read64Little(static_cast<const uint8_t*>(msg));
             if (bufferSize < length)
                 throw NetworkException(10055, "message from client exceeds buffer size (length: " + std::to_string(bufferSize) +
                                        ", buffer size: " + std::to_string(length) + ")");
@@ -344,7 +354,7 @@ namespace OpenLogReplicator {
             }
         }
 
-        uint64_t length = le32toh(*static_cast<const uint32_t*>(msg));
+        uint64_t length = Ctx::read32Little(static_cast<const uint8_t*>(msg));
         if (length < MAX_LENGTH) {
             // 32-bit message length
             if (bufferSize < length)
@@ -381,7 +391,7 @@ namespace OpenLogReplicator {
                 }
             }
 
-            length = le64toh(*static_cast<const uint32_t*>(msg));
+            length = Ctx::read64Little(static_cast<const uint8_t*>(msg));
             if (bufferSize < length)
                 throw NetworkException(10055, "message from client exceeds buffer size (length: " + std::to_string(bufferSize) +
                                        ", buffer size: " + std::to_string(length) + ")");
