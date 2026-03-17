@@ -47,6 +47,11 @@
   - `feat(scripts)`: conditional compilation для SO_REUSEPORT
   - `refactor(gitignore)`: создан .gitignore
 
+- **Solaris SPARC64 поддержка**
+  - `fix(build)`: resolve Solaris SPARC64 compatibility issues
+  - `fix(network)`: handle big-endian byte order in Solaris network client
+  - `fix(parser)`: correct transaction buffer alignment
+
 ---
 
 ## [1.8.7-45-7d57cc1a] - 2026-03-23
@@ -79,6 +84,5 @@
 
 - **Solaris SPARC64 поддержка**
   - `fix(build)`: resolve Solaris SPARC64 compatibility issues
-  - `fix(build)`: add struct keyword for utsname на Solaris SPARC64
-  - `fix(network)`: handle big-endian byte order в Solaris network client
-  - `fix(parser)`: correct x86/x86_64 transaction buffer alignment
+  - `fix(network)`: handle big-endian byte order in Solaris network client
+  - `fix(parser)`: correct transaction buffer alignment

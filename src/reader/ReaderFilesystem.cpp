@@ -19,9 +19,9 @@ If not, see <http://www.gnu.org/licenses/>. */
 
 #define _LARGEFILE_SOURCE
 
-enum {
-    _FILE_OFFSET_BITS = 64
-};
+#ifndef _FILE_OFFSET_BITS
+#define _FILE_OFFSET_BITS 64
+#endif
 
 #include <cerrno>
 #include <cstring>

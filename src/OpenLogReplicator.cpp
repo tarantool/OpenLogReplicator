@@ -39,7 +39,11 @@ If not, see <http://www.gnu.org/licenses/>. */
 #include <cerrno>
 #include <fcntl.h>
 #include <regex>
+
+#ifndef __sun
 #include <sys/file.h>
+#endif
+
 #include <sys/stat.h>
 #include <thread>
 #include <utility>
@@ -155,12 +159,29 @@ namespace OpenLogReplicator {
         }
 
         struct stat configFileStat{};
+#ifdef __sun
+        // On Solaris, need write access for fcntl(F_SETLK) with F_WRLCK
+        fid = open(configFileName.c_str(), O_RDWR);
+#else
         fid = open(configFileName.c_str(), O_RDONLY);
+#endif
         if (fid == -1)
             throw RuntimeException(10001, "file: " + configFileName + " - open for read returned: " + strerror(errno));
 
+        // Use fcntl on Solaris, flock on Linux/macOS
+#ifdef __sun
+        struct flock fl{};
+        fl.l_type = F_WRLCK;
+        fl.l_whence = SEEK_SET;
+        fl.l_start = 0;
+        fl.l_len = 0;
+        if (fcntl(fid, F_SETLK, &fl) != 0) {
+            throw RuntimeException(10002, "file: " + configFileName + " - lock operation returned: " + strerror(errno));
+        }
+#else
         if (flock(fid, LOCK_EX | LOCK_NB) != 0)
             throw RuntimeException(10002, "file: " + configFileName + " - lock operation returned: " + strerror(errno));
+#endif
 
         if (stat(configFileName.c_str(), &configFileStat) != 0)
             throw RuntimeException(10003, "file: " + configFileName + " - get metadata returned: " + strerror(errno));

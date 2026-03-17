@@ -143,7 +143,7 @@ if (WITH_RDKAFKA)
 endif ()
 
 if (WITH_PROMETHEUS)
-    target_link_libraries(OpenLogReplicator prometheus-cpp-core prometheus-cpp-pull)
+    target_link_libraries(OpenLogReplicator prometheus-cpp-pull prometheus-cpp-core)
 endif ()
 
 if (WITH_PROTOBUF)
@@ -157,7 +157,7 @@ if (WITH_PROTOBUF)
     target_link_libraries(StreamClient Threads::Threads)
 
     if (WITH_PROMETHEUS)
-        target_link_libraries(StreamClient prometheus-cpp-core prometheus-cpp-pull)
+        target_link_libraries(StreamClient prometheus-cpp-pull prometheus-cpp-core)
     endif ()
 
     if (WITH_ZEROMQ)

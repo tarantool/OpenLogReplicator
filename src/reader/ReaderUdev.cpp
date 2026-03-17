@@ -39,8 +39,15 @@ along with OpenLogReplicator; see the file LICENSE;  If not see
 #endif
 #endif
 
-// macOS doesn't have O_DIRECT, use O_FSYNC instead
+// macOS doesn't have O_DIRECT, use 0 instead
 #ifdef __APPLE__
+#ifndef O_DIRECT
+#define O_DIRECT 0
+#endif
+#endif
+
+// Solaris doesn't have O_DIRECT
+#ifdef __sun
 #ifndef O_DIRECT
 #define O_DIRECT 0
 #endif

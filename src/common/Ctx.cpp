@@ -864,7 +864,7 @@ namespace OpenLogReplicator {
         void* array[128];
         int size;
         std::stringstream result;
-        result << "stacktrace for thread: " + std::to_string(reinterpret_cast<uint64_t>(pthread_self())) + "\n";
+        result << "stacktrace for thread: " + std::to_string(static_cast<uint64_t>(pthread_self())) + "\n";
         {
             std::unique_lock const lck(mtx);
             size = backtrace(array, 128);
@@ -939,7 +939,7 @@ namespace OpenLogReplicator {
         std::unique_lock const lck(mtx);
         printMemoryUsageCurrent();
         for (Thread* thread: threads) {
-            error(10014, "Dump: " + thread->getName() + " " + std::to_string(reinterpret_cast<uint64_t>(thread->pthread)) +
+            error(10014, "Dump: " + thread->getName() + " " + std::to_string(static_cast<uint64_t>(thread->pthread)) +
                   " context: " + std::to_string(static_cast<uint>(thread->curContext)) +
                   " reason: " + std::to_string(static_cast<uint>(thread->curReason)) +
                   " switches: " + std::to_string(thread->contextSwitches));

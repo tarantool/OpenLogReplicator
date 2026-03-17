@@ -122,16 +122,18 @@ namespace OpenLogReplicator {
 template<>
 struct std::hash<OpenLogReplicator::LobId> {
     size_t operator()(const OpenLogReplicator::LobId& lobId) const noexcept {
-        return (static_cast<size_t>(lobId.data[9]) << 56) ^
-                (static_cast<size_t>(lobId.data[8]) << 50) ^
-                (static_cast<size_t>(lobId.data[7]) << 42) ^
-                (static_cast<size_t>(lobId.data[6]) << 36) ^
-                (static_cast<size_t>(lobId.data[5]) << 30) ^
-                (static_cast<size_t>(lobId.data[4]) << 24) ^
-                (static_cast<size_t>(lobId.data[3]) << 18) ^
-                (static_cast<size_t>(lobId.data[2]) << 12) ^
-                (static_cast<size_t>(lobId.data[1]) << 6) ^
-                (static_cast<size_t>(lobId.data[0]));
+        // Use uint64_t for intermediate calculation to avoid shift overflow on 32-bit systems
+        const uint64_t hash = (static_cast<uint64_t>(lobId.data[9]) << 56) ^
+                (static_cast<uint64_t>(lobId.data[8]) << 50) ^
+                (static_cast<uint64_t>(lobId.data[7]) << 42) ^
+                (static_cast<uint64_t>(lobId.data[6]) << 36) ^
+                (static_cast<uint64_t>(lobId.data[5]) << 30) ^
+                (static_cast<uint64_t>(lobId.data[4]) << 24) ^
+                (static_cast<uint64_t>(lobId.data[3]) << 18) ^
+                (static_cast<uint64_t>(lobId.data[2]) << 12) ^
+                (static_cast<uint64_t>(lobId.data[1]) << 6) ^
+                (static_cast<uint64_t>(lobId.data[0]));
+        return static_cast<size_t>(hash);
     }
 };
 
