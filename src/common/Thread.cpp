@@ -20,6 +20,7 @@ If not, see <http://www.gnu.org/licenses/>. */
 #include "Ctx.h"
 #include "Thread.h"
 
+#include <pthread.h>
 #include <utility>
 #include "exception/RuntimeException.h"
 
@@ -38,6 +39,17 @@ namespace OpenLogReplicator {
 
     void* Thread::runStatic(void* voidThread) {
         auto* thread = static_cast<Thread*>(voidThread);
+        // Set thread name (max 15 characters + null terminator)
+        std::string name = thread->getName();
+        if (name.length() > 15)
+            name = name.substr(0, 15);
+#if __linux__
+        pthread_setname_np(thread->pthread, name.c_str());
+#endif
+#if __APPLE__
+        pthread_setname_np(name.c_str());
+#endif
+
         thread->contextRun();
         thread->finished = true;
         return nullptr;

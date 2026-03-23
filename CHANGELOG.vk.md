@@ -43,6 +43,9 @@
   - `doc(asm)`: документация ASM классов
   - `feat(archivelogs)`: настройка гибридного чтения архивных логов, возможность чтения архивных логов на ASM или из ФС
 
+- **Форматирование вывода**
+  - `feat(thread)`: установка OS thread name для отладки
+
 - **Скрипты и сборка**
   - `feat(scripts)`: conditional compilation для SO_REUSEPORT
   - `refactor(gitignore)`: создан .gitignore
@@ -57,6 +60,10 @@
 ## [1.8.7-45-7d57cc1a] - 2026-03-23
 
 ### Добавлено
+
+- **Документация**
+  - `docs`: описание pipeline of work как форка
+  - `docs`: cross-compile для Solaris SPARC64
 
 - **ASM (Automatic Storage Management) поддержка**
   - `feat(asm)`: ASM Replicator — чтение данных напрямую из ASM
@@ -75,10 +82,6 @@
   - `feat(scripts)`: conditional compilation для SO_REUSEPORT
   - `refactor(cmake)`: отдельное линкование для `nnz` библиотеки
   - `refactor(gitignore)`: создан .gitignore
-
-- **Документация**
-  - `docs`: описание pipeline of work как форка
-  - `docs`: cross-compile для Solaris SPARC64
 
 ### Исправлено
 
