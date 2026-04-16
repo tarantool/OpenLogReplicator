@@ -29,6 +29,7 @@ along with OpenLogReplicator; see the file LICENSE;  If not see
 
 #include "../common/Clock.h"
 #include "../common/Ctx.h"
+#include "../common/metrics/Metrics.h"
 #include "ReaderFilesystem.h"
 
 
@@ -178,6 +179,8 @@ namespace OpenLogReplicator {
             ctx->error(46666, "unable to read file " + fileName);
             return REDO_CODE::ERROR;
         }
+        if (ctx->metrics != nullptr)
+            ctx->metrics->emitBytesRead(blockSize);
         return REDO_CODE::OK;
     }
 
