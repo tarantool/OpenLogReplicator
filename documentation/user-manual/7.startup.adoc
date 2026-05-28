@@ -28,4 +28,26 @@ During the first run, checkpoint files are created.
 By default, they are placed in the `checkpoint` directory, but this location is configurable.
 Each checkpoint file contains a copy of the schema and is associated with a specific SCN.
 
+=== Running as a systemd service
+
+On Linux, OpenLogReplicator can be supervised by `systemd` for automatic start on boot, restart on failure, and centralized logging through `journald`.
+
+A ready-to-adapt templated unit and a full deployment walkthrough are provided under `scripts/systemd/`:
+
+* `scripts/systemd/openlogreplicator@.service` — templated unit (one instance per source config).
+* `scripts/systemd/README.md` — systemd guide: the universal unit (same for both readers), an `asm-udev` vs `online`/filesystem comparison, and end-to-end runbooks for both an Oracle-in-ASM and a filesystem (CDB/PDB) source on CentOS 7.
+
+==== Operating
+
+[source,bash]
+----
+sudo cp scripts/systemd/openlogreplicator@.service /etc/systemd/system/
+sudo systemctl daemon-reload
+
+sudo systemctl enable --now openlogreplicator@mydb   # start + start on boot
+sudo systemctl status      openlogreplicator@mydb
+journalctl -u openlogreplicator@mydb -f              # follow logs
+sudo systemctl stop        openlogreplicator@mydb    # graceful (SIGINT)
+----
+
 Next chapter: xref:8.checkpointing.adoc[Checkpointing]

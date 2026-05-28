@@ -13,7 +13,7 @@ trigger docker dev with tests:
   trigger:
     project: tarantool/cdc/v9/openlogreplicator-docker-vk
     strategy: depend
-    branch: add-tests
+    branch: vk
   variables:
     OLR_BRANCH: ${CI_COMMIT_REF_NAME}
     BUILD_TYPE: dev

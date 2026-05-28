@@ -1,0 +1,39 @@
+# Universal systemd template for OpenLogReplicator — works for BOTH redo readers:
+#   - ASM        (reader.type "asm-udev")
+#   - Filesystem (reader.type "online")
+# Only the JSON config and the service user's access differ, not this unit.
+# Instance name selects the config: openlogreplicator@<name> -> scripts/<name>.json
+# Adjust paths/user below to your bundle. See README.md for details.
+#
+# NOTE for asm-udev: do NOT add PrivateDevices=true / ProtectSystem=strict —
+# they hide /dev/* and break direct ASM block-device access.
+
+[Unit]
+Description=OpenLogReplicator Oracle CDC (instance %i)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=olr
+Group=olr
+
+Environment=LD_LIBRARY_PATH=/opt/OpenLogReplicator/instantclient_19_28:/opt/OpenLogReplicator/librdkafka:/opt/OpenLogReplicator/prometheus:/opt/OpenLogReplicator/prometheus64:/opt/OpenLogReplicator/protobuf
+
+WorkingDirectory=/opt/OpenLogReplicator
+ExecStart=/opt/OpenLogReplicator/OpenLogReplicator -f /opt/OpenLogReplicator/scripts/%i.json -p OLR-%i
+
+KillSignal=SIGINT
+TimeoutStopSec=120
+Restart=on-failure
+RestartSec=5s
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=openlogreplicator@%i
+
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

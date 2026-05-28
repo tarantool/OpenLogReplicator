@@ -265,3 +265,62 @@ The easiest way to compile is via the {url-github-docker}[OpenLogReplicator dock
 ----
 
 Refer to Dockerfile and build.sh in the repository for details about required libraries and dependencies.
+
+
+== Running under systemd
+
+OpenLogReplicator can run as a systemd service. A templated unit and a detailed
+guide are provided in `scripts/systemd/` (`openlogreplicator@.service` +
+`README.md`).
+
+=== One unit for both readers
+
+The *same* systemd unit works for both redo-reading modes — ASM
+(`reader.type` = `asm-udev`) and filesystem (`reader.type` = `online`).
+
+[cols="1,2,2",options="header"]
+|===
+| | ASM (`asm-udev`) | Filesystem (`online`)
+| Where redo lives | ASM storage (`+DATA/.../ONLINELOG/...`) | files on disk (`/opt/oracle/oradata/...`, FRA)
+| `reader.type` | `asm-udev` | `online`
+| ASM credentials | yes (`user-asm` / `password-asm` / `server-asm`) | no
+| How OLR reads redo | opens ASM *block devices* (`/dev/...`, `O_DIRECT`) | opens redo *files* directly
+| Service user needs access to | ASM disks → group `asmadmin`/`oinstall`/`disk` | redo files → group `oinstall`/`dba`
+| Sandboxing | do NOT hide `/dev` (`PrivateDevices`/`ProtectSystem=strict`) | `/dev` not needed
+| The systemd unit | identical | identical
+|===
+
+=== Templated unit
+
+`openlogreplicator@<name>` runs one instance per config, reading
+`scripts/<name>.json`. Key points:
+
+* `Type=simple`, run as a non-root `User=`/`Group=` (OLR refuses to run as root).
+* `KillSignal=SIGINT` — OLR performs a graceful shutdown only on `SIGINT`
+  (`Ctx::signalHandler`); the systemd default `SIGTERM` is not handled.
+  `TimeoutStopSec` gives in-flight transactions time to flush.
+* `Environment=LD_LIBRARY_PATH=...` pointing at the bundled libraries
+  (Instant Client, librdkafka, protobuf, prometheus-cpp), or call the bundle's
+  `run.sh` from `ExecStart` instead.
+* For `asm-udev` keep `/dev` visible: do not set `PrivateDevices=true` or
+  `ProtectSystem=strict`.
+* On old systemd (e.g. CentOS 7 / systemd 219) `StateDirectory` is unavailable —
+  create writable dirs (state, checkpoint, output) manually and `chown` them to
+  the service user.
+
+[source,shell]
+----
+# Create the dedicated service user if it does not exist:
+#> getent passwd olr >/dev/null || \
+#>   sudo useradd --system --home-dir /opt/OpenLogReplicator --shell /sbin/nologin olr
+
+#> sudo cp scripts/systemd/openlogreplicator@.service /etc/systemd/system/
+#> sudo systemctl daemon-reload
+#> sudo systemctl enable --now openlogreplicator@<name>
+#> journalctl -u openlogreplicator@<name> -f
+----
+
+Verify CDC end-to-end with a committed DML change in a tracked schema (for a CDB,
+`ALTER SESSION SET CONTAINER=<PDB>` first); the change appears in the writer
+output. See `scripts/systemd/README.md` for full step-by-step instructions and
+troubleshooting.
