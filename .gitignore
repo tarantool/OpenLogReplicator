@@ -56,3 +56,9 @@ tarantool-cdc-docker-bundle/
 tarantool-cdc-docker-bundle-*.tar.gz
 offsets.dat
 config.h
+
+build/
+cmake-build-*/
+tests/3-generated/
+tests/.work/
+tests/.results/

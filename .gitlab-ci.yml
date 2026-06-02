@@ -1,21 +1,28 @@
 stages:
-  - build-olr
+  - build-and-test
+  - release
 
-trigger docker dev build:
-  stage: build-olr
+# ----------------------------------------------------------------------------
+# Dev image build and Regression tests for openlogreplicator-docker-vk
+# ----------------------------------------------------------------------------
+trigger docker dev with tests:
+  stage: build-and-test
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "1.9.0"'
-      when: always
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_PIPELINE_SOURCE == "push"'
   trigger:
     project: tarantool/cdc/v9/openlogreplicator-docker-vk
     strategy: depend
-    branch: vk
+    branch: add-tests
   variables:
     OLR_BRANCH: ${CI_COMMIT_REF_NAME}
     BUILD_TYPE: dev
 
+# ----------------------------------------------------------------------------
+# Release image build on version tag — separate flow, no tests gating
+# ----------------------------------------------------------------------------
 trigger docker prod build:
-  stage: build-olr
+  stage: release
   rules:
     - if: '$CI_COMMIT_BRANCH == "1.9.0" && $CI_PIPELINE_SOURCE == "push"'
       when: always

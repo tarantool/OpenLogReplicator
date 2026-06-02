@@ -47,6 +47,11 @@ if (CPU_ARCH)
     add_compile_definitions(CPU_ARCH=${CPU_ARCH})
 endif()
 
+# Test build type mirrors Debug (assertions, sanitizers) so CI test pipelines
+# get the same checks as Debug builds.
+set(CMAKE_CXX_FLAGS_TEST "${CMAKE_CXX_FLAGS_DEBUG}")
+set(CMAKE_LINKER_FLAGS_TEST "${CMAKE_LINKER_FLAGS_DEBUG}")
+
 if (THREAD_INFO)
     add_compile_definitions(THREAD_INFO)
 endif()

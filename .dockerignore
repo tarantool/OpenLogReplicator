@@ -1,0 +1,8 @@
+.git/
+.github/
+oracle-rac/
+# tests/0-inputs, tests/1-environments and tests/scripts are required inside
+# the image for ci-testgen (generate.sh + scenario SQLs + per-Oracle compose).
+tests/2-prebuilt/
+tests/3-generated/
+tests/.work/

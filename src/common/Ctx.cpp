@@ -20,8 +20,9 @@ If not, see <http://www.gnu.org/licenses/>. */
 #define GLOBALS 1
 
 #include <algorithm>
-#include <cstdlib>
 #include <csignal>
+#include <cstdlib>
+#include <cstring>
 #include <execinfo.h>
 #include <iostream>
 #include <set>
@@ -860,11 +861,17 @@ namespace OpenLogReplicator {
         logTrace(TRACE::THREADS, "main loop end");
     }
 
+    static uint64_t pthreadToU64(pthread_t t) {
+        uint64_t v = 0;
+        std::memcpy(&v, &t, std::min(sizeof(v), sizeof(t)));
+        return v;
+    }
+
     void Ctx::printStacktrace() {
         void* array[128];
         int size;
         std::stringstream result;
-        result << "stacktrace for thread: " + std::to_string(static_cast<uint64_t>(pthread_self())) + "\n";
+        result << "stacktrace for thread: " + std::to_string(pthreadToU64(pthread_self())) + "\n";
         {
             std::unique_lock const lck(mtx);
             size = backtrace(array, 128);
@@ -939,7 +946,7 @@ namespace OpenLogReplicator {
         std::unique_lock const lck(mtx);
         printMemoryUsageCurrent();
         for (Thread* thread: threads) {
-            error(10014, "Dump: " + thread->getName() + " " + std::to_string(static_cast<uint64_t>(thread->pthread)) +
+            error(10014, "Dump: " + thread->getName() + " " + std::to_string(pthreadToU64(thread->pthread)) +
                   " context: " + std::to_string(static_cast<uint>(thread->curContext)) +
                   " reason: " + std::to_string(static_cast<uint>(thread->curReason)) +
                   " switches: " + std::to_string(thread->contextSwitches));

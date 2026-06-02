@@ -1,0 +1,33 @@
+# Test environment: Oracle XE 21c.
+#
+# The OLR binary and test scripts no longer run as a compose service — both CI
+# and local dev use the olr-dev image as the *job/shell* that drives this
+# oracle container via `docker exec` / `docker cp`. See tests/scripts/generate.sh.
+#
+# Local dev quick start:
+#   make build                                                        # build olr-dev image
+#   docker compose -f tests/1-environments/xe-21/docker-compose.yaml up -d --wait
+#   docker run --rm -it --network host \
+#       -v /var/run/docker.sock:/var/run/docker.sock \
+#       -v $(pwd)/tests/3-generated:/opt/OpenLogReplicator-local/tests/3-generated \
+#       olr-dev:latest \
+#       bash -lc "cd /opt/OpenLogReplicator-local && tests/scripts/generate.sh basic-crud"
+services:
+  oracle:
+    image: gvenzl/oracle-xe:21.3.0-slim-faststart
+    container_name: oracle
+    ports:
+      - "1521:1521"
+    environment:
+      ORACLE_PASSWORD: oracle
+      APP_USER: olr_test
+      APP_USER_PASSWORD: olr_test
+    # Oracle XE 21 cold-start can take 4-6 min on slow CI runners (template DB
+    # unpack + ARCHIVELOG enable). start_period keeps `compose --wait` patient.
+    shm_size: "2gb"
+    healthcheck:
+      test: ["CMD", "healthcheck.sh"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 600s
