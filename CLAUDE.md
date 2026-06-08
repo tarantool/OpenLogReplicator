@@ -138,6 +138,17 @@ Runtime config is a JSON file passed via `-f` flag. Key sections:
 
 Example configs in `scripts/OpenLogReplicator-example-*.json`.
 
+### Table-name case sensitivity
+
+OLR matches `filter.table` (`owner`/`table`) as a **case-sensitive** regex
+against the Oracle data dictionary, which stores unquoted identifiers in
+**UPPERCASE** — so filters must be uppercase. OLR emits schema/table uppercase
+and the `db` segment verbatim from `source[].name`. When OLR feeds a Debezium
+Oracle connector, the `db` segment must use the **same case** in
+`table.include.list`, `signal.data.collection`, and signal `data-collections`,
+or signals are silently dropped and incremental snapshots fail with
+`Schema not found`.
+
 ## Testing
 
 There is **no automated test suite in this repository**. The upstream project relies on a private regression suite. For local validation:

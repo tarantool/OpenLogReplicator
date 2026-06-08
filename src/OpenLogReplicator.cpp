@@ -36,6 +36,7 @@ If not, see <http://www.gnu.org/licenses/>. */
  */
 
 #include <algorithm>
+#include <cctype>
 #include <cerrno>
 #include <fcntl.h>
 #include <regex>
@@ -512,7 +513,11 @@ namespace OpenLogReplicator {
             const std::string alias = Ctx::getJsonFieldS(configFileName, Ctx::JSON_PARAMETER_LENGTH, sourceJson, "alias");
             ctx->info(0, "adding source: " + alias);
 
-            const std::string name = Ctx::getJsonFieldS(configFileName, Ctx::JSON_PARAMETER_LENGTH, sourceJson, "name");
+            const std::string nameRaw = Ctx::getJsonFieldS(configFileName, Ctx::JSON_PARAMETER_LENGTH, sourceJson, "name");
+            std::string name = nameRaw;
+            std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c) { return std::toupper(c); });
+            if (name != nameRaw)
+                ctx->info(0, "source name normalized to upper case for db segment consistency: \"" + nameRaw + "\" -> \"" + name + "\"");
             const rapidjson::Value& readerJson = Ctx::getJsonFieldO(configFileName, sourceJson, "reader");
 
             if (!ctx->isDisableChecksSet(Ctx::DISABLE_CHECKS::JSON_TAGS)) {
