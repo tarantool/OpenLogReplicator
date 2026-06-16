@@ -934,6 +934,7 @@ namespace OpenLogReplicator {
 
         void processCommit() override;
         void processCheckpoint(Seq sequence, Scn scn, Time timestamp, FileOffset fileOffset, bool redo) override;
+        std::string buildInitialSchemaMessage(const DbTable* table, Scn scn, const std::string& db) override;
     };
 }
 

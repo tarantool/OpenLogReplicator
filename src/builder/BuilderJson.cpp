@@ -17,6 +17,8 @@ You should have received a copy of the GNU Affero General Public
 License along with this program; see the file LICENSE;
 If not, see <http://www.gnu.org/licenses/>. */
 
+#include <ctime>
+
 #include "../common/DbTable.h"
 #include "../common/types/RowId.h"
 #include "../metadata/Metadata.h"
@@ -709,5 +711,109 @@ namespace OpenLogReplicator {
             msg->tagSize = messagePosition - messagePositionOld;
         else
             msg->tagSize = messageSize + messagePosition;
+    }
+
+    namespace {
+        std::string jsonEscape(const std::string& str) {
+            std::ostringstream ss;
+            Data::writeEscapeValue(ss, str);
+            return ss.str();
+        }
+
+        int timestampScale(int scale) {
+            if (scale < 0 || scale > 9)
+                return 6;
+            return scale;
+        }
+
+        // Maps an Oracle column to its DDL type clause.
+        std::string oracleColumnType(const DbColumn* column) {
+            const uint length = column->length;
+            const int precision = column->precision;
+            const int scale = column->scale;
+            switch (column->type) {
+                case SysCol::COLTYPE::VARCHAR: return "VARCHAR2(" + std::to_string(length > 0 ? length : 4000) + ")";
+                case SysCol::COLTYPE::CHAR: return "CHAR(" + std::to_string(length > 0 ? length : 1) + ")";
+                case SysCol::COLTYPE::NUMBER:
+                    if (precision > 0) {
+                        if (scale != 0)
+                            return "NUMBER(" + std::to_string(precision) + "," + std::to_string(scale) + ")";
+                        return "NUMBER(" + std::to_string(precision) + ")";
+                    }
+                    return "NUMBER";
+                case SysCol::COLTYPE::LONG: return "LONG";
+                case SysCol::COLTYPE::DATE: return "DATE";
+                case SysCol::COLTYPE::RAW: return "RAW(" + std::to_string(length > 0 ? length : 2000) + ")";
+                case SysCol::COLTYPE::LONG_RAW: return "LONG RAW";
+                case SysCol::COLTYPE::FLOAT: return "BINARY_FLOAT";
+                case SysCol::COLTYPE::DOUBLE: return "BINARY_DOUBLE";
+                case SysCol::COLTYPE::CLOB: return "CLOB";
+                case SysCol::COLTYPE::BLOB: return "BLOB";
+                case SysCol::COLTYPE::TIMESTAMP: return "TIMESTAMP(" + std::to_string(timestampScale(scale)) + ")";
+                case SysCol::COLTYPE::TIMESTAMP_WITH_TZ: return "TIMESTAMP(" + std::to_string(timestampScale(scale)) + ") WITH TIME ZONE";
+                case SysCol::COLTYPE::TIMESTAMP_WITH_LOCAL_TZ:
+                    return "TIMESTAMP(" + std::to_string(timestampScale(scale)) + ") WITH LOCAL TIME ZONE";
+                case SysCol::COLTYPE::INTERVAL_YEAR_TO_MONTH: return "INTERVAL YEAR TO MONTH";
+                case SysCol::COLTYPE::INTERVAL_DAY_TO_SECOND: return "INTERVAL DAY TO SECOND";
+                case SysCol::COLTYPE::UROWID: return "UROWID";
+                default: return "VARCHAR2(4000)";
+            }
+        }
+    }
+
+    std::string BuilderJson::buildInitialSchemaMessage(const DbTable* table, Scn scn, const std::string& db) {
+        if (table == nullptr)
+            return {};
+
+        std::string ddl = "CREATE TABLE \"" + table->owner + "\".\"" + table->name + "\" (";
+
+        bool first = true;
+        for (const DbColumn* column : table->columns) {
+            if (column == nullptr)
+                continue;
+            if (column->hidden || column->nested || column->unused || column->guard || column->storedAsLob)
+                continue;
+
+            if (!first)
+                ddl += ", ";
+            first = false;
+
+            ddl += "\"" + column->name + "\" " + oracleColumnType(column);
+            if (!column->nullable)
+                ddl += " NOT NULL";
+        }
+
+        // Without any captured column the DDL would be invalid; skip such tables.
+        if (first)
+            return {};
+
+        // Primary key (required for an incremental snapshot to run against the table).
+        std::string pkCols;
+        for (const typeCol idx : table->pk) {
+            if (idx < 0 || idx >= static_cast<typeCol>(table->columns.size()))
+                continue;
+            const DbColumn* column = table->columns[idx];
+            if (column == nullptr)
+                continue;
+            if (!pkCols.empty())
+                pkCols += ", ";
+            pkCols += "\"" + column->name + "\"";
+        }
+        if (!pkCols.empty())
+            ddl += ", PRIMARY KEY (" + pkCols + ")";
+
+        ddl += ")";
+
+        const int64_t tmMs = static_cast<int64_t>(time(nullptr)) * 1000;
+        const std::string scnStr = std::to_string(scn.getData());
+
+        std::string out = R"({"scn":")" + scnStr + R"(","tm":)" + std::to_string(tmMs) +
+                          R"(,"c_scn":")" + scnStr + R"(","c_idx":0)";
+        if (!db.empty())
+            out += R"(,"db":")" + jsonEscape(db) + "\"";
+        out += R"(,"payload":[{"op":"ddl","schema":{"owner":")" + jsonEscape(table->owner) +
+               R"(","table":")" + jsonEscape(table->name) + R"(","obj":)" + std::to_string(table->obj) + "}";
+        out += R"(,"sql":")" + jsonEscape(ddl) + "\"}]}";
+        return out;
     }
 }

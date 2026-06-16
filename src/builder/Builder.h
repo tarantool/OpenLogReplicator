@@ -1250,6 +1250,13 @@ namespace OpenLogReplicator {
         [[nodiscard]] uint64_t builderSize() const;
         [[nodiscard]] uint64_t getMaxMessageMb() const;
         void setMaxMessageMb(uint64_t maxMessageMb);
+        // Builds a self-contained streaming message describing a table's schema.
+        virtual std::string buildInitialSchemaMessage(const DbTable* table, Scn scn, const std::string& db) {
+            (void) table;
+            (void) scn;
+            (void) db;
+            return {};
+        }
         void processBegin(Xid xid, uint16_t newThread, Seq newBeginSequence, Scn newBeginScn, Time newBeginTimestamp, Seq newCommitSequence, Scn newCommitScn,
                           Time newCommitTimestamp, const AttributeMap* newAttributes);
         void processInsertMultiple(Seq sequence, Scn scn, Time timestamp, LobCtx* lobCtx, const XmlCtx* xmlCtx, const RedoLogRecord* redoLogRecord1,

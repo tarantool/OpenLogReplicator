@@ -31,10 +31,12 @@ namespace OpenLogReplicator {
         Stream* stream;
         pb::RedoRequest request;
         pb::RedoResponse response;
+        bool initialSchemasSent{false};
 
         std::string getType() const override;
         void processInfo();
         void processStart();
+        void sendInitialSchemas();
         void processContinue();
         void processConfirm();
         void pollQueue() override;

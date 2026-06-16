@@ -17,10 +17,18 @@ You should have received a copy of the GNU Affero General Public
 License along with this program; see the file LICENSE;
 If not, see <http://www.gnu.org/licenses/>. */
 
+#include <mutex>
+#include <regex>
+#include <utility>
+#include <vector>
+
 #include "../builder/Builder.h"
+#include "../common/DbTable.h"
 #include "../common/OraProtoBuf.pb.h"
 #include "../common/exception/NetworkException.h"
 #include "../metadata/Metadata.h"
+#include "../metadata/Schema.h"
+#include "../metadata/SchemaElement.h"
 #include "../stream/Stream.h"
 #include "WriterStream.h"
 
@@ -156,10 +164,66 @@ namespace OpenLogReplicator {
 
             ctx->info(0, "streaming to client");
             streaming = true;
+            initialSchemasSent = false;
         } else {
             ctx->logTrace(Ctx::TRACE::WRITER, "starting failed");
             response.set_code(pb::ResponseCode::FAILED_START);
         }
+    }
+
+    void WriterStream::sendInitialSchemas() {
+        if (initialSchemasSent)
+            return;
+
+        // Pre-compile the table.include.list filters once, instead of recompiling them for every table.
+        std::vector<std::pair<std::regex, std::regex>> filters;
+        filters.reserve(metadata->schemaElements.size());
+        for (const SchemaElement* element : metadata->schemaElements) {
+            if (element == nullptr)
+                continue;
+            try {
+                filters.emplace_back(std::regex(element->owner), std::regex(element->table));
+            } catch (const std::regex_error& e) {
+                ctx->warning(0, "invalid regex in schema element: owner='" + element->owner +
+                                "' table='" + element->table + "' error: " + e.what());
+            }
+        }
+
+        std::vector<std::string> messages;
+        {
+            std::lock_guard<std::mutex> const lck(metadata->mtxSchema);
+            for (const auto& [obj, table] : metadata->schema->tableMap) {
+                if (table == nullptr)
+                    continue;
+
+                // Check if table matches any schema element filter (table.include.list)
+                bool matchesFilter = false;
+                for (const auto& [regexOwner, regexTable] : filters) {
+                    if (std::regex_match(table->owner, regexOwner) && std::regex_match(table->name, regexTable)) {
+                        matchesFilter = true;
+                        break;
+                    }
+                }
+                if (!matchesFilter)
+                    continue;
+
+                std::string msgS = builder->buildInitialSchemaMessage(table, metadata->firstDataScn, metadata->conName);
+                if (!msgS.empty())
+                    messages.push_back(std::move(msgS));
+            }
+        }
+
+        for (const std::string& msgS : messages) {
+            if (unlikely(ctx->isTraceSet(Ctx::TRACE::STREAM)))
+                ctx->logTrace(Ctx::TRACE::STREAM, "initial schema[" + std::to_string(msgS.length()) + "]: [" + msgS + "]");
+
+            stream->sendMessage(msgS.c_str(), msgS.length());
+        }
+
+        if (!messages.empty())
+            ctx->info(0, "preloaded schema for " + std::to_string(messages.size()) + " table(s) to stream client");
+
+        initialSchemasSent = true;
     }
 
     void WriterStream::processContinue() {
@@ -194,6 +258,7 @@ namespace OpenLogReplicator {
         response.set_code(pb::ResponseCode::REPLICATE);
         ctx->info(0, "streaming to client");
         streaming = true;
+        initialSchemasSent = false;
     }
 
     void WriterStream::processConfirm() {
@@ -263,6 +328,8 @@ namespace OpenLogReplicator {
                             processStart();
                             response.SerializeToString(&msgS);
                             stream->sendMessage(msgS.c_str(), msgS.length());
+                            if (streaming)
+                                sendInitialSchemas();
                             break;
 
                         case pb::RequestCode::CONTINUE:
