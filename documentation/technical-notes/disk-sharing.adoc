@@ -1,0 +1,273 @@
+= Шаринг дисков в OpenLogReplicator
+
+OLR читает redo только на чтение (`O_RDONLY`), не пишет в диски и не ставит блокировки.
+Поэтому шаринг сводится к двум сценариям:
+
+. *Один диск - несколько инстансов OLR* (на одном хосте).
+. *Диски источника - на другом сервере* (cross-server, режим `asm-udev`).
+
+Общий риск для обоих: `ReaderUdev` грузит extent map один раз при открытии файла и не
+перечитывает. При активном ASM rebalance физические AU перемещаются и extent map устаревает.
+
+== Раздел 1. Шаринг одного диска между несколькими инстансами OLR
+
+Несколько процессов OLR на одном хосте читают одни и те же redo (filesystem или один блочный
+девайс). `O_RDONLY` допускает множественное чтение, координация не нужна - все только читают.
+
+Требования к конфигам: уникальный `source[].alias`, разные `state.path` (checkpoint) и
+`target[].writer.output` у каждого экземпляра.
+
+=== Filesystem
+
+Чтение redo как обычных файлов. `open()` с `O_RDONLY` (+ опц. `O_DIRECT`), без
+`flock`/`lockf`/`O_EXCL`. Несколько экземпляров читают один файл без конфликтов.
+
+[source,bash]
+----
+# O_DIRECT доступен
+python -c "import os; print(oct(os.O_DIRECT))"
+# 040000
+
+# два читателя одного файла - оба завершаются без ошибок
+dd if=/opt/oracle/.../o1_mf_1_nvqqmkgq_.log of=/dev/null bs=1M &
+dd if=/opt/oracle/.../o1_mf_1_nvqqmkgq_.log of=/dev/null bs=1M
+----
+
+Проверка двух OLR на одном файле:
+
+[source,bash]
+----
+./OpenLogReplicator -f config1.json &
+./OpenLogReplicator -f config2.json &
+
+# оба открыли один redo файл
+ls -la /proc/<PID1>/fd/ | grep redo
+ls -la /proc/<PID2>/fd/ | grep redo
+
+# но читают независимо (разные позиции)
+grep pos /proc/<PID1>/fdinfo/<fd>   # pos: 754
+grep pos /proc/<PID2>/fdinfo/<fd>   # pos: 758
+----
+
+Разные позиции - процессы читают независимо, без конфликтов.
+
+=== ASM (udev)
+
+Чтение напрямую с блочных устройств ASM:
+
+. extent map (`{disk_number, au_number}`) строится из `x$kffxp` по OCI к ASM;
+. диски открываются `O_RDONLY | O_DIRECT`;
+. `pread()` по физическому offset через extent map.
+
+Доступ только на чтение, каждый экземпляр строит свою extent map.
+
+*Старт.* Экземпляр c пустым `checkpoint` строит схему от
+текущего SCN.
+
+==== Верификация на Linux
+
+*Стенд:* CentOS 7, Oracle 19c EE, диск-группа `DATA` - 1 диск
+(`/dev/oracleasm/disks/DATA2`), два экземпляра `asm-udev` с раздельными `checkpoint`.
+
+*Шаги:* `INSERT`+`UPDATE` в `USR1.PERSON` (метка `MARKER_001`) ->
+`ADD SUPPLEMENTAL LOG DATA (ALL) COLUMNS` -> `SWITCH LOGFILE` -> рестарт второго.
+
+[cols="1,1,2", options="header"]
+|===
+| Проверка | Результат | Факт
+
+| Эквивалентность DML | ✅ | по 3 вхождения `MARKER_001`, `diff` контента совпадает
+| Обработка DDL | ✅ | `updated metadata: USR1.PERSON` у обоих на одном SCN
+| Log switch | ✅ | оба перешли seq 103->104 на `scn: 61491874`
+| Рестарт-независимость | ✅ | второй стартовал `from scn: 61493411`, продолжение с offset `657920`
+| Rebalance | не покрывается | 1 диск - релокации AU нет
+|===
+
+== Раздел 2. Шаринг дисков между серверами (cross-server, `asm-udev`)
+
+[cols="1,2,2", options="header"]
+|===
+| | VM-A | VM-B
+| Роль | *источник* | *потребитель*
+| Что на нём | Oracle + `ASM` | OLR
+| iSCSI | target - отдаёт диск | initiator - подключает чужой диск
+|===
+
+=== Порядок действий
+
+[cols="1,1,4", options="header"]
+|===
+| # | Где | Действие
+| 1 | VM-B | (только если на VM-B есть свой `ASM`) сузить `asm_diskstring` до своих дисков
+| 2 | VM-B | запустить iSCSI-клиент, скопировать IQN этой машины
+| 3 | VM-A | отдать диск через `targetcli`, разрешить IQN из шага 2, открыть порт 3260
+| 4 | VM-B | подключить диск, отдать в oracleasm, выдать права пользователю OLR
+| 5 | VM-B | в `olr.json` указать `server`/`server-asm` на VM-A, очистить чужой checkpoint
+| 6 | VM-B | запустить OLR и проверить
+|===
+
+Детали каждого шага - ниже.
+
+=== Предусловие: блочный шаринг диска
+
+Нужен один диск, видимый обоим серверам - пробрасывается через *iSCSI*.
+
+* *iSCSI* (Internet SCSI) -  даёт одной машине пользоваться диском другой машины по сети будто это локальный диск.
+Машина, которая отдаёт диск - *target*; машина, которая подключается -
+*initiator*. У каждого initiator'а есть уникальный идентификатор - *IQN* (iSCSI
+Qualified Name), лежит в `/etc/iscsi/initiatorname.iscsi`.
+На target настраивается список доступа для защиты от посторонних подключений.
+
+=== Шаг 1. Изолировать собственный ASM потребителя (если он есть)
+
+Если на VM-B крутится свой `ASM`, он сканит `/dev/oracleasm/disks/*` и может
+подхватить проброшенный живой диск источника (защита от случайного `ALTER DISKGROUP ADD DISK` по
+живому диску источника). Сужаем discovery до своих дисков:
+
+[source,sql]
+----
+-- VM-B, sqlplus / as sysasm; перечислить ТОЛЬКО свои диски
+ALTER SYSTEM SET asm_diskstring='/dev/oracleasm/disks/DATA2','/dev/oracleasm/disks/FRA2' SCOPE=BOTH;
+----
+
+=== Шаг 2. iSCSI target на источнике (VM-A), read-only
+
+Сначала на VM-B узнаём её IQN (имя инициатора).
+Запустим iSCSI-клиент и посмотрим файл с IQN
+
+[source,bash]
+----
+# VM-B: запустить службу инициатора и узнать свой IQN
+sudo systemctl enable --now iscsid
+cat /etc/iscsi/initiatorname.iscsi      # InitiatorName=iqn.... - скопировать
+----
+
+Затем на VM-A поднимаем target и вставляем этот IQN в строку `acls create`:
+
+[source,bash]
+----
+sudo systemctl enable --now target
+sudo targetcli
+----
+[source]
+----
+/backstores/block create name=asmshare dev=/dev/vdb readonly=true
+/iscsi create iqn.2025-06.local.asm:vma
+/iscsi/iqn.2025-06.local.asm:vma/tpg1/luns create /backstores/block/asmshare
+/iscsi/iqn.2025-06.local.asm:vma/tpg1/acls create <IQN-потребителя>
+/iscsi/iqn.2025-06.local.asm:vma/tpg1 set attribute authentication=0
+saveconfig
+exit
+----
+[source,bash]
+----
+sudo firewall-cmd --permanent --add-port=3260/tcp && sudo firewall-cmd --reload
+# + открыть TCP 3260 от VM-B на уровне облака (security group), только внутренний IP
+----
+
+`readonly=true` ограничивает только iSCSI-путь - локальные записи ASM источника не затрагиваются.
+VM-B физически не может испортить заголовки диска источника.
+
+=== Шаг 3. iSCSI initiator на потребителе (VM-B)
+
+[source,bash]
+----
+sudo iscsiadm -m discovery -t sendtargets -p <VM-A-внутренний-IP>
+sudo iscsiadm -m node -T iqn.2025-06.local.asm:vma -p <VM-A-внутренний-IP> --login
+lsblk          # появится /dev/sdX (RO=1) с разделами sdX1/2/3
+----
+
+=== Шаг 4. Отдать разделы в oracleasm и выдать права
+
+Разделы несут заголовки `ORCLDISK`, oracleasm опознаёт их по меткам:
+
+[source,bash]
+----
+sudo oracleasm scandisks
+sudo oracleasm listdisks            # DATA1/FRA1/CRS1 рядом со своими дисками
+ls -l /dev/oracleasm/disks/
+
+# процесс OLR должен иметь права на чтение устройства (владелец grid:asmadmin, 0660):
+sudo usermod -aG asmadmin <пользователь-OLR>   # перезайти по ssh после этого
+----
+
+=== Шаг 5. Конфиг OLR (`asm-udev`) на потребителе
+
+`server`/`server-asm` обязательно указывают на источник (VM-A), не на `localhost`:
+
+[source,json]
+----
+"reader": {
+  "type": "asm-udev",
+  "user": "dbzuser",
+  "password": "...",
+  "server":     "//10.0.0.91:1521/orcl",
+  "user-asm": "sys",
+  "password-asm": "...",
+  "server-asm": "//10.0.0.91:1521/+ASM"
+}
+----
+
+`localhost` здесь критичен: если оставить локальный `ASM` потребителя, extent map будет от
+его дисков (DATA2/FRA2), а блоки читаться с проброшенного диска источника.
+
+=== Шаг 6. Запуск и проверка
+
+[source,bash]
+----
+rm -f <checkpoint>/*    # очистить чужой checkpoint (был от другой БД)
+export LD_LIBRARY_PATH=/u01/app/oracle/19c/db_home/lib:$LD_LIBRARY_PATH
+OpenLogReplicator -f olr.json
+----
+
+Признак, что шаринг работает (`"trace": 1248` = SQL|FILE|DISK|REDO):
+
+[source]
+----
+[ReaderUdev] Loaded 51 extents for +DATA/.../group_...   # extent map с VM-A
+Opened disk 1 at /dev/oracleasm/disks/DATA1              # открыт проброшенный диск
+TRACE DISK reading#1 +DATA/.../group_2.263 ... got: 512  # блоки читаются
+----
+
+Отсутствие `invalid block` / `ERROR_CRC` = extent map источника совпала с байтами на iSCSI-диске.
+
+Финальная проверка - DML на VM-A появляется в `output-*.json` на VM-B:
+
+[source,sql]
+----
+INSERT INTO USR1.PERSON (id, name, surname, gender, birth_date, age, metadata, description, enabled)
+VALUES (5000001,'Ivan','Petrov','M',DATE '1990-05-17',35,HEXTORAW('DEADBEEF'),'cdc test',1);
+COMMIT;
+UPDATE USR1.PERSON SET surname='Sidorov' WHERE id=5000001;
+COMMIT;
+DELETE FROM USR1.PERSON WHERE id=5000001;
+COMMIT;
+----
+
+=== Особенности, выявленные при проверке
+
+[cols="1,2", options="header"]
+|===
+| Наблюдение | Поведение / действие
+
+| Redo мультиплексирован (`+DATA` + `+FRA`) | OLR пробует `+FRA` первым, при неудаче откатывается на `+DATA`. Достаточно одного рабочего диска.
+| Один диск (`FRA1`) не инстанцировался в oracleasm | Fallback на `+DATA`. Диск read-only, поэтому `oracleasm deletedisk/createdisk` (пишут заголовок) неприменимы.
+| `Permission denied` на устройстве | Пользователь OLR не в `asmadmin`. Добавить в группу.
+| Прошлый `checkpoint` от другой БД | Очистить перед стартом против нового источника.
+|===
+
+== Вывод
+
+[cols="1,2", options="header"]
+|===
+| Сценарий | Шаринг
+
+| Filesystem (несколько OLR) | ✅ без ограничений
+| ASM udev (несколько OLR) | ✅ без rebalance
+| ASM udev cross-server (iSCSI) | ✅ без rebalance
+|===
+
+На Linux подтверждены оба сценария: несколько экземпляров на одном хосте дают идентичный
+результат; cross-server `asm-udev` через iSCSI читает живой
+redo соседнего сервера напрямую с проброшенного блочного устройства. Главный остаточный риск -
+rebalance под статичной extent map (рестарт OLR при смене топологии).

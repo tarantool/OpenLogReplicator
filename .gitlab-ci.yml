@@ -9,7 +9,17 @@ trigger docker dev with tests:
   stage: build-and-test
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - src/**/*
+        - CMakeLists.txt
+        - cmake/**/*
+        - Makefile
     - if: '$CI_PIPELINE_SOURCE == "push"'
+      changes:
+        - src/**/*
+        - CMakeLists.txt
+        - cmake/**/*
+        - Makefile
   trigger:
     project: tarantool/cdc/v9/openlogreplicator-docker-vk
     strategy: depend
