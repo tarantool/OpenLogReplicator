@@ -400,10 +400,6 @@ namespace OpenLogReplicator {
                 return REDO_CODE::ERROR;
             }
 
-            // Set block size for redo logs (Oracle standard is 512 bytes)
-            // TODO: make it right (TNTP-6558)
-            blockSize = 512;
-
             if (!openDisks()) {
                 ctx->error(0, "Failed to open ASM disks for: " + fileName);
                 extentMap.clear();
@@ -415,6 +411,10 @@ namespace OpenLogReplicator {
                 diskHandles.clear();
                 return REDO_CODE::ERROR;
             }
+
+            // Detect block size by reading the Oracle file header.
+            if (Reader::reloadHeaderRead() != REDO_CODE::OK)
+                return REDO_CODE::ERROR;
 
             ctx->info(0, "[ReaderUdev] redoOpen " + fileName + " complete: fileSize=" + std::to_string(fileSize) +
                      " (" + std::to_string(fileSize / 1024 / 1024) + " MB), blockSize=" + std::to_string(blockSize));
