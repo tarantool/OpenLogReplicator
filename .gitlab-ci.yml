@@ -3,7 +3,8 @@ stages:
   - release
 
 # ----------------------------------------------------------------------------
-# Dev image build and Regression tests for openlogreplicator-docker-vk
+# Dev image build + unit/regression tests run downstream in openlogreplicator-docker-vk
+# (this project has no runners of its own; unit tests run inside the built dev image).
 # ----------------------------------------------------------------------------
 trigger docker dev with tests:
   stage: build-and-test
@@ -11,12 +12,14 @@ trigger docker dev with tests:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
         - src/**/*
+        - tests/**/*
         - CMakeLists.txt
         - cmake/**/*
         - Makefile
     - if: '$CI_PIPELINE_SOURCE == "push"'
       changes:
         - src/**/*
+        - tests/**/*
         - CMakeLists.txt
         - cmake/**/*
         - Makefile

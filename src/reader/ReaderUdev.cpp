@@ -53,6 +53,7 @@ along with OpenLogReplicator; see the file LICENSE;  If not see
 #endif
 #endif
 
+#include "AsmFileName.h"
 #include "ReaderUdev.h"
 #include "../replicator/ReplicatorOnlineASM.h"
 #include "../common/exception/RuntimeException.h"
@@ -75,6 +76,14 @@ namespace OpenLogReplicator {
     static constexpr const char* SQL_QUERY_ASM_DISK =
         "SELECT disk_number, path FROM v$asm_disk WHERE group_number = :1";
 
+    // Resolve by file number (unique within a disk group); used for fully-qualified system names.
+    static constexpr const char* SQL_QUERY_ASM_METADATA_BY_FILENUM =
+        "SELECT f.type, f.blocks, f.bytes, g.allocation_unit_size, g.group_number, f.file_number "
+        "FROM v$asm_file f "
+        "JOIN v$asm_diskgroup g ON f.group_number = g.group_number "
+        "WHERE g.name = :1 AND f.file_number = :2";
+
+    // Fallback for user aliases: match by name (only the last path component, may collide across dirs).
     static constexpr const char* SQL_QUERY_ASM_METADATA =
         "SELECT f.type, f.blocks, f.bytes, g.allocation_unit_size, g.group_number, a.file_number "
         "FROM v$asm_file f "
@@ -331,13 +340,16 @@ namespace OpenLogReplicator {
             const std::string diskGroupName = fileName.substr(1, firstSlash - 1);
             const std::string filePath = fileName.substr(firstSlash + 1);
 
-            // In v$asm_alias, NAME contains only the filename (last component), not the full path
-            // For "+DATA/ORCL/ONLINELOG/group_4.267.1224328757" we need just "group_4.267.1224328757"
-            // TODO: possible we'll need full path to in case there are duplicate names (TNTP-6557)
             const size_t lastSlash = filePath.rfind('/');
             const std::string fileNameOnly = (lastSlash == std::string::npos) ? filePath : filePath.substr(lastSlash + 1);
 
-            ctx->info(0, "[ReaderUdev] Parsed diskGroupName='" + diskGroupName + "', filePath='" + filePath + "', fileNameOnly='" + fileNameOnly + "'");
+            // Prefer resolving by embedded file# (unambiguous); aliases fall back to name matching below.
+            uint32_t parsedFileNumber = 0;
+            const bool haveFileNumber = parseAsmFileNumber(fileNameOnly, parsedFileNumber);
+
+            ctx->info(0, "[ReaderUdev] Parsed diskGroupName='" + diskGroupName + "', filePath='" + filePath +
+                     "', fileNameOnly='" + fileNameOnly + "', fileNumber=" +
+                     (haveFileNumber ? std::to_string(parsedFileNumber) : std::string("(alias)")));
 
             auto* replicatorOnlineAsm = dynamic_cast<ReplicatorOnlineASM *>(replicator);
 
@@ -348,9 +360,15 @@ namespace OpenLogReplicator {
             {
                 ctx->info(0, "[ReaderUdev] Querying ASM metadata for: " + fileName);
                 DatabaseStatement stmt(replicatorOnlineAsm->connASMMeta);
-                stmt.createStatement(SQL_QUERY_ASM_METADATA);
-                stmt.bindString(1, diskGroupName);
-                stmt.bindString(2, fileNameOnly);
+                if (haveFileNumber) {
+                    stmt.createStatement(SQL_QUERY_ASM_METADATA_BY_FILENUM);
+                    stmt.bindString(1, diskGroupName);
+                    stmt.bindUInt(2, parsedFileNumber);
+                } else {
+                    stmt.createStatement(SQL_QUERY_ASM_METADATA);
+                    stmt.bindString(1, diskGroupName);
+                    stmt.bindString(2, fileNameOnly);
+                }
                 char fileTypeBuf[32];
                 stmt.defineString(1, fileTypeBuf, sizeof(fileTypeBuf));
                 stmt.defineUInt(2, fileSizeRaw);  // blocks
@@ -360,6 +378,12 @@ namespace OpenLogReplicator {
                 stmt.defineUInt(6, fileNumber);
                 if (stmt.executeQuery() == 0) {
                     ctx->error(0, "File not found in ASM: " + fileName);
+                    return REDO_CODE::ERROR;
+                }
+                // A second row means the alias name is ambiguous across directories.
+                if (!haveFileNumber && stmt.next() != 0) {
+                    ctx->error(0, "Ambiguous ASM alias '" + fileNameOnly + "' in disk group '" + diskGroupName +
+                               "' matches multiple files; cannot resolve " + fileName);
                     return REDO_CODE::ERROR;
                 }
                 fileType = std::string(fileTypeBuf);
