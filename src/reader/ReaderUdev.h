@@ -28,6 +28,7 @@ along with OpenLogReplicator; see the file LICENSE;  If not see
 
 #include <vector>
 #include <map>
+#include <set>
 #include <string>
 #include <fcntl.h>
 
@@ -118,13 +119,14 @@ namespace OpenLogReplicator {
         std::string fileType;
 
         /**
-         * @brief ASM extent map: list of (disk_number, allocation_unit) in file order.
+         * @brief ASM extent map: for each logical extent, the list of mirror copies (primary first).
          *
-         * Each entry represents one allocation unit of the file. The index in vector is the logical extent number
-         * (0, 1, 2, ...), and the AsmExtent structure contains the physical disk location where this allocation unit
-         * is stored.
+         * extentMap[i] holds all copies of logical extent i, ordered by lxn_kffxp (index 0 = primary).
+         * readDirect() tries copies in order and falls back to the next one on pread error, so a single
+         * failed disk does not stop replication as long as at least one mirror copy is reachable.
+         * For EXTERNAL redundancy diskgroups each inner vector has exactly one entry.
          */
-        std::vector<AsmExtent> extentMap;
+        std::vector<std::vector<AsmExtent>> extentMap;
 
         /**
          * @brief Map of opened disk handles, where keys are disk_number and values are AsmDisk mapping.
@@ -133,6 +135,9 @@ namespace OpenLogReplicator {
          * based on unique disk numbers found in extentMap, and disk paths are obtained from v$asm_disk.
          */
         std::map<uint16_t, AsmDisk> diskHandles;
+
+        // Disks that returned an I/O error; skipped in readDirect so we don't retry a known-bad copy every read.
+        std::set<uint16_t> deadDisks;
 
         /**
          * @brief Allocation Unit size in bytes (got from v$asm_diskgroup).
@@ -219,9 +224,8 @@ namespace OpenLogReplicator {
         /**
          * @brief Loads the extent map from x$kffxp table.
          *
-         * Queries the ASM extent allocation table to build the mapping between
-         * logical file extents and physical disk locations. Only primary extents
-         * (lxn_kffxp = 0) are loaded.
+         * Primary extents only (lxn_kffxp = 0); if a primary disk is unreachable, reads fail —
+         * restart from checkpoint or fall back to ReaderASM.
          */
         bool loadExtentMap();
 

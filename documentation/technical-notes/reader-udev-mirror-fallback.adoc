@@ -1,0 +1,239 @@
+= ReaderUdev: fallback на mirror-копии ASM
+
+`ReaderUdev` читает redo-логи через прямой доступ к блочным устройствам ASM.
+Для NORMAL/HIGH redundancy диксгрупов Oracle хранит несколько копий каждого экстента
+(`lxn_kffxp = 0` - primary, `1..N` - mirror). Ридер использует их как резерв на случай
+ошибки чтения primary-копии.
+
+== Поведение
+
+. При открытии файла загружаются *все копии* каждого логического экстента с группировкой
+  по `xnum_kffxp` (запрос без фильтра `lxn_kffxp`, сортировка по `xnum_kffxp, lxn_kffxp`).
+. В `readDirect()` копии перебираются по порядку (primary → mirror) до первого успешного
+  `pread`.
+. Диск, вернувший ошибку, помечается как недоступный (`deadDisks`) и в этой сессии
+  ридера повторно не используется - без спама варнингов на каждый read.
+. Для EXTERNAL диксгрупов каждый логический экстент имеет ровно одну копию, поведение
+  идентично прежнему.
+
+== Требования к стенду
+
+- Oracle 19c с ASM.
+- Учётные записи `sys as sysasm` и `sys as sysdba`.
+- Доступ на чтение к блочным устройствам ASM (`grid:asmadmin` или запуск от `grid`).
+- Минимум два свободных блочных устройства (или loopback-файлов) для NORMAL redundancy
+  диксгрупа.
+
+== 1. Сборка OLR (CentOS 7)
+
+[source,bash]
+----
+sudo yum install -y centos-release-scl
+sudo yum install -y devtoolset-9 devtoolset-9-libasan-devel cmake3 git
+source /opt/rh/devtoolset-9/enable
+
+cd ~/openlogreplicator
+git submodule update --init --recursive
+mkdir -p cmake-build-release && cd cmake-build-release
+
+CC=/opt/rh/devtoolset-9/root/usr/bin/gcc \
+CXX=/opt/rh/devtoolset-9/root/usr/bin/g++ \
+cmake3 .. \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DWITH_RAPIDJSON=$HOME/openlogreplicator/rapidjson \
+  -DWITH_OCI=/opt/instantclient_19_28
+
+make -j$(nproc)
+----
+
+== 2. Создание диксгрупа с зеркалированием
+
+Если на стенде нет NORMAL/HIGH диксгрупа, создаётся тестовый на loopback-устройствах.
+
+[source,bash]
+----
+sudo mkdir -p /var/lib/asm-test
+sudo dd if=/dev/zero of=/var/lib/asm-test/d1.img bs=1M count=1024
+sudo dd if=/dev/zero of=/var/lib/asm-test/d2.img bs=1M count=1024
+sudo losetup /dev/loop10 /var/lib/asm-test/d1.img
+sudo losetup /dev/loop11 /var/lib/asm-test/d2.img
+sudo chown grid:asmadmin /dev/loop10 /dev/loop11
+sudo chmod 660 /dev/loop10 /dev/loop11
+----
+
+Подключение к ASM и настройка `asm_diskstring`:
+
+[source,bash]
+----
+export ORACLE_HOME=/u01/app/grid/19c/grid_home
+export ORACLE_SID=+ASM
+$ORACLE_HOME/bin/sqlplus / as sysasm
+----
+
+[source,sql]
+----
+ALTER SYSTEM SET asm_diskstring='/dev/oracleasm/disks/*','/dev/loop*' SCOPE=BOTH;
+SELECT path, header_status FROM v$asm_disk WHERE path LIKE '/dev/loop%';
+-- /dev/loop10 CANDIDATE
+-- /dev/loop11 CANDIDATE
+
+CREATE DISKGROUP DATA_MIRROR NORMAL REDUNDANCY
+  FAILGROUP fg1 DISK '/dev/loop10'
+  FAILGROUP fg2 DISK '/dev/loop11'
+  ATTRIBUTE 'compatible.asm' = '19.0';
+----
+
+== 3. Добавление redo group на mirror-диксгрупе
+
+[source,bash]
+----
+export ORACLE_HOME=/u01/app/oracle/19c/db_home
+export ORACLE_SID=ORCL
+$ORACLE_HOME/bin/sqlplus / as sysdba
+----
+
+[source,sql]
+----
+ALTER DATABASE ADD LOGFILE GROUP 11 ('+DATA_MIRROR') SIZE 50M;
+ALTER SYSTEM SWITCH LOGFILE;
+SELECT group#, status FROM v$log;
+-- переключать пока group# 11 не станет CURRENT
+----
+
+== 4. Конфигурация OLR
+
+`scripts/olr.json` (за основу берётся `OpenLogReplicator-example-asm.json`,
+меняется `"type": "asm"` на `"type": "asm-udev"`):
+
+[source,json]
+----
+{
+  "version": "1.9.0",
+  "state": { "type": "disk", "path": "../checkpoint" },
+  "source": [{
+    "alias": "S1",
+    "name": "XE",
+    "flags": 4096,
+    "reader": {
+      "type": "asm-udev",
+      "user": "dbzuser",
+      "password": "dbz",
+      "server": "//localhost:1521/ORCL",
+      "user-asm": "sys",
+      "password-asm": "<sys-password>",
+      "server-asm": "//localhost:1521/+ASM"
+    },
+    "state": { "type": "disk", "path": "../checkpoint" },
+    "format": { "type": "json", "db": 3, "column": 2, "message": 2, "scn-type": 5 },
+    "filter": { "table": [{ "owner": "USR1", "table": ".*" }] }
+  }],
+  "target": [{
+    "alias": "K1",
+    "source": "S1",
+    "writer": { "type": "file", "output": "output-%t.json", "new-line": 1 }
+  }]
+}
+----
+
+Блок `metrics` удаляется, если OLR собран без `WITH_PROMETHEUS`.
+
+== 5. Запуск и проверка загрузки extent map
+
+[source,bash]
+----
+cd ~/openlogreplicator/cmake-build-release
+mkdir -p ../checkpoint
+./OpenLogReplicator -f ../scripts/olr.json 2>&1 | tee /tmp/olr.log
+----
+
+Ожидаемые строки в логе для файла на mirror-диксгрупе:
+
+----
+[ReaderUdev] Loading extent map for group_number=3, file_number=256
+Loaded 51 extents for +DATA_MIRROR/ORCL/ONLINELOG/group_11.256.1237625879
+[ReaderUdev] v$asm_disk loaded 2 disks
+Opened disk 0 at /dev/loop10
+Opened disk 1 at /dev/loop11
+processing redo log: group: 11 ... path: +DATA_MIRROR/ORCL/ONLINELOG/group_11.256.1237625879
+----
+
+Число экстентов совпадает с `SELECT COUNT(DISTINCT xnum_kffxp) FROM x$kffxp WHERE ...`;
+без группировки в запросе было бы в два раза больше (по числу копий).
+
+== 6. Fault injection - закрытие fd primary-диска
+
+[source,bash]
+----
+PID=$(pgrep -f OpenLogReplicator)
+ls -l /proc/$PID/fd/ | grep -E 'loop10|loop11'
+# lr-x------. ... 12 -> /dev/loop10
+# lr-x------. ... 13 -> /dev/loop11
+
+sudo gdb -p $PID -batch -ex 'call (int)close(12)' -ex 'detach' -ex 'quit'
+----
+
+== 7. Проверка fallback
+
+В `/tmp/olr.log` появляется *ровно один* warning:
+
+----
+WARN 00000 pread failed on disk /dev/loop10 offset=74081280 err=Bad file descriptor, marking dead and trying next copy
+----
+
+Дальнейшие чтения на loop10 не выполняются - диск помечен в `deadDisks`. Репликация
+продолжается через loop11.
+
+== 8. Проверка потока данных после падения primary
+
+Тестовая вставка в отфильтрованную таблицу:
+
+[source,sql]
+----
+INSERT INTO USR1.PERSON (id, name, gender, birth_date)
+SELECT NVL(MAX(id), 0) + 1, 'smoke', 'M', DATE '1990-01-01' FROM USR1.PERSON;
+COMMIT;
+----
+
+Поиск события в output-файле:
+
+[source,bash]
+----
+grep -E '"op":"c".*"PERSON"' output-*.json | tail
+----
+
+Ожидаемый результат:
+
+[source,json]
+----
+{"scn":64833271,"payload":[{"op":"c","schema":{"owner":"USR1","table":"PERSON"},
+ "after":{"ID":4370004,"NAME":"smoke","GENDER":"M","BIRTH_DATE":631152000000000000}}]}
+----
+
+`"op":"c"` соответствует INSERT, поле `"after"` содержит данные - событие прочитано
+через mirror-копию.
+
+== 9. Восстановление стенда
+
+Останов OLR (Ctrl+C) - при следующем `redoOpen()` дескрипторы открываются заново,
+`deadDisks` очищается.
+
+[source,sql]
+----
+ALTER DATABASE DROP LOGFILE GROUP 11;
+DROP DISKGROUP DATA_MIRROR INCLUDING CONTENTS;
+----
+
+[source,bash]
+----
+sudo losetup -d /dev/loop10 /dev/loop11
+sudo rm /var/lib/asm-test/d1.img /var/lib/asm-test/d2.img
+----
+
+== Ограничения реализации
+
+- `deadDisks` живёт до `redoClose()`. Транзиентные ошибки не восстанавливаются
+  автоматически, при устойчивой проблеме требуется перезапуск ридера.
+- Синхронность копий гарантирует Oracle: LGWR фиксирует запись только после
+  подтверждения от всех зеркал. Ридер не сверяет checksum между копиями.
+- Для EXTERNAL диксгрупов `extentMap[i]` содержит одну копию, поведение
+  совместимо с прежней реализацией.

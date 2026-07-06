@@ -32,6 +32,7 @@ along with OpenLogReplicator; see the file LICENSE;  If not see
 #include <sstream>
 #include <set>
 #include <mutex>
+#include <limits>
 
 #ifdef __linux__
 #ifndef O_DIRECT
@@ -64,14 +65,14 @@ along with OpenLogReplicator; see the file LICENSE;  If not see
 namespace OpenLogReplicator {
 
     // SQL queries for ASM metadata
+    // Returns all mirror copies (lxn_kffxp = 0 primary, 1..N mirrors); grouped by xnum_kffxp in loadExtentMap.
     static constexpr const char* SQL_QUERY_EXTENT_MAP =
-        "SELECT x.disk_kffxp, x.au_kffxp "
+        "SELECT x.xnum_kffxp, x.disk_kffxp, x.au_kffxp "
         "FROM x$kffxp x "
         "WHERE x.group_kffxp = :1 "
         "AND x.number_kffxp = :2 "
-        "AND x.lxn_kffxp = 0 "
         "AND x.xnum_kffxp != 2147483648 "
-        "ORDER BY x.xnum_kffxp, x.pxn_kffxp";
+        "ORDER BY x.xnum_kffxp, x.lxn_kffxp";
 
     static constexpr const char* SQL_QUERY_ASM_DISK =
         "SELECT disk_number, path FROM v$asm_disk WHERE group_number = :1";
@@ -138,6 +139,7 @@ namespace OpenLogReplicator {
         }
         diskHandles.clear();
         extentMap.clear();
+        deadDisks.clear();
     }
 
     bool ReaderUdev::getAfdDeviceMapping(std::map<std::string, std::string>& afdMap) {
@@ -180,28 +182,28 @@ namespace OpenLogReplicator {
             ctx->info(0, "[ReaderUdev] Loading extent map for group_number=" + std::to_string(groupNumber) +
                      ", file_number=" + std::to_string(fileNumber));
 
-            // Load extent map from x$kffxp
             {
-                ctx->info(0, "[ReaderUdev] Querying x$kffxp for group_number=" + std::to_string(groupNumber) +
-                         ", file_number=" + std::to_string(fileNumber));
                 DatabaseStatement stmt(replicatorOnlineAsm->connASMMeta);
-                // lxn_kffxp = 0 means primary extent (mirror copy)
-                // TODO: make issue about lxn_kffxp (TNTP-6556)
                 stmt.createStatement(SQL_QUERY_EXTENT_MAP);
                 stmt.bindInt(1, groupNumber);
                 stmt.bindInt(2, fileNumber);
 
+                uint32_t xnum = 0;
                 uint16_t diskNum = 0;
                 uint32_t auNum = 0;
-                stmt.defineUInt(1, diskNum);
-                stmt.defineUInt(2, auNum);
+                stmt.defineUInt(1, xnum);
+                stmt.defineUInt(2, diskNum);
+                stmt.defineUInt(3, auNum);
 
                 extentMap.clear();
-                ctx->info(0, "[ReaderUdev] Executing x$kffxp query...");
+                uint32_t prevXnum = std::numeric_limits<uint32_t>::max();
                 int ret = stmt.executeQuery();
-                ctx->info(0, "[ReaderUdev] x$kffxp query executed, ret=" + std::to_string(ret));
                 while (ret == 1) {
-                    extentMap.push_back({diskNum, auNum});
+                    if (xnum != prevXnum) {
+                        extentMap.emplace_back();
+                        prevXnum = xnum;
+                    }
+                    extentMap.back().push_back({diskNum, auNum});
                     ret = stmt.next();
                 }
             }
@@ -256,8 +258,10 @@ namespace OpenLogReplicator {
             // diskPaths contains ALL disks in the diskgroup (could be 10-50), but we only
             // want to open disks that actually store data for this specific file.
             std::set<uint16_t> usedDisks;
-            for (const auto& extent : extentMap) {
-                usedDisks.insert(extent.diskNumber);
+            for (const auto& copies : extentMap) {
+                for (const auto& extent : copies) {
+                    usedDisks.insert(extent.diskNumber);
+                }
             }
 
             // Handle AFD path resolution if any disk path starts with "AFD:"
@@ -494,44 +498,39 @@ namespace OpenLogReplicator {
                 return -1;
             }
 
-            // Get disk number and physical AU location for this logical extent
-            // diskNumber: which disk (0, 1, 2...)
-            // auNumber: physical AU number on that disk (can be any number, not sequential)
-            const auto&[diskNumber, auNumber] = extentMap[auIndex];
-
-            auto diskIt = diskHandles.find(diskNumber);
-            if (diskIt == diskHandles.end()) {
-                ctx->error(0, "Disk handle not found for disk " + std::to_string(diskNumber));
-                return -1;
-            }
-
-            const int fd = diskIt->second.fd;
-
-            // Calculate physical byte offset on the block device:
-            // physicalOffset = (AU number on disk * AU size) + offset within AU
-            // Example: auNumber=12, auSize=1MB, offsetInAu=512KB -> 12.5MB
-            const uint64_t physicalOffset = static_cast<uint64_t>(auNumber) * auSize + offsetInAu;
-
-            // Read up to end of current AU or remaining bytes, whichever is smaller
+            // Try each mirror copy in order (primary first) until one succeeds.
+            // Known-bad disks are skipped so we don't spam a dead fd on every read.
+            const auto& copies = extentMap[auIndex];
             const uint32_t toRead = std::min<uint32_t>(remaining, auSize - offsetInAu);
-
-            // Read from disk
-            const ssize_t n = pread(fd, buf + bytesRead, toRead, static_cast<off_t>(physicalOffset));
-            if (n < 0) {
-                ctx->error(0, "pread failed: " + std::string(strerror(errno)) +
-                         " disk=" + diskIt->second.path +
-                         " offset=" + std::to_string(physicalOffset));
-                return -1;
+            ssize_t n = -1;
+            for (const auto& [diskNumber, auNumber] : copies) {
+                if (deadDisks.count(diskNumber) > 0)
+                    continue;
+                auto diskIt = diskHandles.find(diskNumber);
+                if (diskIt == diskHandles.end()) {
+                    ctx->warning(0, "Disk handle not found for disk " + std::to_string(diskNumber) + ", marking dead");
+                    deadDisks.insert(diskNumber);
+                    continue;
+                }
+                const uint64_t physicalOffset = static_cast<uint64_t>(auNumber) * auSize + offsetInAu;
+                n = pread(diskIt->second.fd, buf + bytesRead, toRead, static_cast<off_t>(physicalOffset));
+                if (n > 0)
+                    break;
+                ctx->warning(0, "pread failed on disk " + diskIt->second.path +
+                         " offset=" + std::to_string(physicalOffset) +
+                         (n < 0 ? " err=" + std::string(strerror(errno)) : " (0 bytes)") +
+                         ", marking dead and trying next copy");
+                deadDisks.insert(diskNumber);
             }
-            if (n == 0) {
-                ctx->error(0, "pread returned 0 bytes");
+            if (n <= 0) {
+                ctx->error(0, "All " + std::to_string(copies.size()) + " mirror copies failed at auIndex=" + std::to_string(auIndex));
                 return -1;
             }
 
             bytesRead += n;
             remaining -= n;
             auIndex++;
-            offsetInAu = 0;  // After first AU, always start at offset 0
+            offsetInAu = 0;
         }
 
         // Fix header block if this is the first read (offset 0)
