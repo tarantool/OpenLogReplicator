@@ -287,7 +287,9 @@ namespace OpenLogReplicator {
         nextScnHeader = ctx->readScn(headerBuffer + blockSize + 192);
         nextTime = ctx->read32(headerBuffer + blockSize + 200);
 
-        if (numBlocksHeader != Ctx::ZERO_BLK && fileSize > static_cast<uint64_t>(numBlocksHeader) * blockSize && group == 0) {
+        // For archived logs nab from the header is authoritative: ASM getfileattr reports one block
+        // less than nab, and stopping short silently drops the last LWN (lost commits, error 50039).
+        if (numBlocksHeader != Ctx::ZERO_BLK && fileSize != static_cast<uint64_t>(numBlocksHeader) * blockSize && group == 0) {
             fileSize = static_cast<uint64_t>(numBlocksHeader) * blockSize;
             ctx->info(0, "updating redo log size to: " + std::to_string(fileSize) + " for: " + fileName);
         }
