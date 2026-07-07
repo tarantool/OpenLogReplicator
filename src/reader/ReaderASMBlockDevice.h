@@ -17,8 +17,8 @@ You should have received a copy of the GNU General Public License
 along with OpenLogReplicator; see the file LICENSE;  If not see
 <http://www.gnu.org/licenses/>.  */
 
-#ifndef READERUDEV_H_
-#define READERUDEV_H_
+#ifndef READERASMBLOCKDEVICE_H_
+#define READERASMBLOCKDEVICE_H_
 
 #include "Reader.h"
 #include "../replicator/Replicator.h"
@@ -61,7 +61,7 @@ namespace OpenLogReplicator {
     /**
      * @brief Reader implementation for direct block device access to Oracle ASM files.
      *
-     * ReaderUdev provides an alternative to ReaderASM for reading Oracle redo log files stored in ASM (Automatic
+     * ReaderASMBlockDevice provides an alternative to ReaderASM for reading Oracle redo log files stored in ASM (Automatic
      * Storage Management). Instead of using the Oracle Call Interface (OCI) and dbms_diskgroup package, this reader
      * accesses ASM disks directly at the block device level using standard POSIX file operations with O_DIRECT flag.
      *
@@ -93,7 +93,7 @@ namespace OpenLogReplicator {
      * - AFD (ASM Filter Driver) paths: AFD:LABEL is resolved via afdtool or fallback to /dev/oracleafd/disks/LABEL
      *
      * Usage context:
-     * ReaderUdev is instantiated by ReplicatorOnlineASM when the useUdev flag is set to true. This is typically
+     * ReaderASMBlockDevice is instantiated by ReplicatorOnlineASM when the useASMBlockDevice flag is set to true. This is typically
      * configured when the user wants to bypass OCI-based ASM access in favor of direct block device reads. The reader
      * is created in ReplicatorOnlineASM::readerCreate() and managed by the replicator's threading system.
      *
@@ -106,7 +106,7 @@ namespace OpenLogReplicator {
      * block checksum correction. ASM stores files with a different header format, so the fixHeaderBlock method applies
      * a magic XOR value to make the header compatible with standard Oracle redo log processing.
      */
-    class ReaderUdev final : public Reader {
+    class ReaderASMBlockDevice final : public Reader {
     protected:
         /**
           * @brief Replicator that owns this reader and provides database connections.
@@ -263,9 +263,9 @@ namespace OpenLogReplicator {
         static bool getAfdDeviceMapping(std::map<std::string, std::string>& afdMap);
 
     public:
-        ReaderUdev(Ctx* newCtx, std::string newAlias, Replicator* replicator,
+        ReaderASMBlockDevice(Ctx* newCtx, std::string newAlias, Replicator* replicator,
                    std::string newDatabase, int newGroup, bool newConfiguredBlockSum);
-        ~ReaderUdev() override;
+        ~ReaderASMBlockDevice() override;
 
         /**
          * @brief Displays a hint message when disk access fails.

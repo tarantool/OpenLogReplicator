@@ -38,13 +38,13 @@ graph TB
         Reader["Reader (abstract)<br/>redoOpen/Read/Close"]
         RF["ReaderFilesystem (final)<br/>pread() с ФС<br/>O_DIRECT / F_NOCACHE"]
         RASM["ReaderASM (final)<br/>OCI + dbms_diskgroup<br/>.open/.read/.close"]
-        RUdev["ReaderUdev (final)<br/>pread() с блочных устройств<br/>extent map из x$kffxp"]
+        RASMBlockDevice["ReaderASMBlockDevice (final)<br/>pread() с блочных устройств<br/>extent map из x$kffxp"]
     end
 
     Rep --> Reader
     Reader --> RF
     Reader --> RASM
-    Reader --> RUdev
+    Reader --> RASMBlockDevice
 
     subgraph Parsing["🔍 Слой парсинга"]
         Parser["Parser (final)<br/>Парсинг redo записей,<br/>группировка в транзакции"]
@@ -137,7 +137,7 @@ graph TB
     classDef dbconn fill:#ef9a9a,stroke:#c62828,stroke-width:2px
 
     class Rep,Reader,Builder,Writer,Stream abstract
-    class RepBatch,RepOnlineASM,RF,RASM,RUdev,BJson,BPB,WFile,WKafka,WStream,WDiscard,SNet,SZMQ final
+    class RepBatch,RepOnlineASM,RF,RASM,RASMBlockDevice,BJson,BPB,WFile,WKafka,WStream,WDiscard,SNet,SZMQ final
     class Ctx,Thread,MM,Exc,DBEnv,DBCon,DBStmt infra
     class Checkpoint,Metadata thread
     class main,OLR entry
@@ -320,7 +320,7 @@ classDiagram
 
     Reader <|-- ReaderFilesystem
     Reader <|-- ReaderASM
-    Reader <|-- ReaderUdev
+    Reader <|-- ReaderASMBlockDevice
 
     Writer <|-- WriterFile
     Writer <|-- WriterKafka
@@ -342,7 +342,7 @@ classDiagram
 
 | Флаг CMake        | Включает                                                                                               |
 |-------------------|--------------------------------------------------------------------------------------------------------|
-| `WITH_OCI`        | DatabaseConnection/Environment/Statement, ReplicatorOnline, ReplicatorOnlineASM, ReaderASM, ReaderUdev |
+| `WITH_OCI`        | DatabaseConnection/Environment/Statement, ReplicatorOnline, ReplicatorOnlineASM, ReaderASM, ReaderASMBlockDevice |
 | `WITH_RDKAFKA`    | WriterKafka                                                                                            |
 | `WITH_PROTOBUF`   | BuilderProtobuf, WriterStream, StreamNetwork, StreamClient (отдельный бинарник), OraProtoBuf.pb        |
 | `WITH_ZEROMQ`     | StreamZeroMQ (требует WITH_PROTOBUF)                                                                   |
@@ -356,4 +356,4 @@ classDiagram
 | `batch` / `offline` | ReplicatorBatch                    | ReaderFilesystem   | ReaderFilesystem              |
 | `online`            | ReplicatorOnline                   | ReaderFilesystem   | ReaderFilesystem              |
 | `asm`               | ReplicatorOnlineASM                | ReaderASM          | ReaderFilesystem / ReaderASM  |
-| `asm-udev`          | ReplicatorOnlineASM (useUdev=true) | ReaderUdev         | ReaderFilesystem / ReaderUdev |
+| `asm-udev`          | ReplicatorOnlineASM (useASMBlockDevice=true) | ReaderASMBlockDevice         | ReaderFilesystem / ReaderASMBlockDevice |

@@ -55,7 +55,7 @@ along with OpenLogReplicator; see the file LICENSE;  If not see
 #endif
 
 #include "AsmFileName.h"
-#include "ReaderUdev.h"
+#include "ReaderASMBlockDevice.h"
 #include "../replicator/ReplicatorOnlineASM.h"
 #include "../common/exception/RuntimeException.h"
 #include "../common/Clock.h"
@@ -115,7 +115,7 @@ namespace OpenLogReplicator {
         return !label.empty() && !path.empty();
     }
 
-    ReaderUdev::ReaderUdev(Ctx* newCtx, std::string newAlias, Replicator* replicator,
+    ReaderASMBlockDevice::ReaderASMBlockDevice(Ctx* newCtx, std::string newAlias, Replicator* replicator,
                            std::string newDatabase, const int newGroup, const bool newConfiguredBlockSum) :
         Reader(newCtx, std::move(newAlias), std::move(newDatabase), newGroup, newConfiguredBlockSum),
         replicator(replicator),
@@ -125,11 +125,11 @@ namespace OpenLogReplicator {
         fileSizeRaw(0) {
     }
 
-    ReaderUdev::~ReaderUdev() {
-        ReaderUdev::redoClose();
+    ReaderASMBlockDevice::~ReaderASMBlockDevice() {
+        ReaderASMBlockDevice::redoClose();
     }
 
-    void ReaderUdev::redoClose() {
+    void ReaderASMBlockDevice::redoClose() {
         // Close all disk handles
         for (auto &[dksNumber, asmDisk] : diskHandles) {
             if (asmDisk.fd >= 0) {
@@ -142,7 +142,7 @@ namespace OpenLogReplicator {
         deadDisks.clear();
     }
 
-    bool ReaderUdev::getAfdDeviceMapping(std::map<std::string, std::string>& afdMap) {
+    bool ReaderASMBlockDevice::getAfdDeviceMapping(std::map<std::string, std::string>& afdMap) {
         const std::unique_ptr<FILE, decltype(&pclose)> pipe(popen("afdtool -getdevlist 2>/dev/null", "r"), pclose);
         if (!pipe) {
             return false;
@@ -175,11 +175,11 @@ namespace OpenLogReplicator {
         return !afdMap.empty();
     }
 
-    bool ReaderUdev::loadExtentMap() {
+    bool ReaderASMBlockDevice::loadExtentMap() {
         try {
             const auto* replicatorOnlineAsm = dynamic_cast<ReplicatorOnlineASM *>(replicator);
 
-            ctx->info(0, "[ReaderUdev] Loading extent map for group_number=" + std::to_string(groupNumber) +
+            ctx->info(0, "[ReaderASMBlockDevice] Loading extent map for group_number=" + std::to_string(groupNumber) +
                      ", file_number=" + std::to_string(fileNumber));
 
             {
@@ -223,16 +223,16 @@ namespace OpenLogReplicator {
         }
     }
 
-    bool ReaderUdev::openDisks() {
+    bool ReaderASMBlockDevice::openDisks() {
         try {
             auto* replicatorOnlineAsm = dynamic_cast<ReplicatorOnlineASM *>(replicator);
 
-            ctx->info(0, "[ReaderUdev] openDisks() starting for group_number=" + std::to_string(groupNumber));
+            ctx->info(0, "[ReaderASMBlockDevice] openDisks() starting for group_number=" + std::to_string(groupNumber));
 
             // Get disk paths from v$asm_disk
             std::map<uint16_t, std::string> diskPaths;
             {
-                ctx->info(0, "[ReaderUdev] Querying v$asm_disk for group_number=" + std::to_string(groupNumber));
+                ctx->info(0, "[ReaderASMBlockDevice] Querying v$asm_disk for group_number=" + std::to_string(groupNumber));
                 DatabaseStatement stmt(replicatorOnlineAsm->connASMMeta);
                 stmt.createStatement(SQL_QUERY_ASM_DISK);
                 stmt.bindInt(1, groupNumber);
@@ -242,14 +242,14 @@ namespace OpenLogReplicator {
                 stmt.defineUInt(1, diskNum);
                 stmt.defineString(2, pathBuf, sizeof(pathBuf));
 
-                ctx->info(0, "[ReaderUdev] Executing v$asm_disk query...");
+                ctx->info(0, "[ReaderASMBlockDevice] Executing v$asm_disk query...");
                 int ret = stmt.executeQuery();
-                ctx->info(0, "[ReaderUdev] v$asm_disk query executed, loading results...");
+                ctx->info(0, "[ReaderASMBlockDevice] v$asm_disk query executed, loading results...");
                 while (ret == 1) {
                     diskPaths[diskNum] = std::string(pathBuf);
                     ret = stmt.next();
                 }
-                ctx->info(0, "[ReaderUdev] v$asm_disk loaded " + std::to_string(diskPaths.size()) + " disks");
+                ctx->info(0, "[ReaderASMBlockDevice] v$asm_disk loaded " + std::to_string(diskPaths.size()) + " disks");
             }
 
             // Collect unique disk numbers used by this file.
@@ -330,7 +330,7 @@ namespace OpenLogReplicator {
         }
     }
 
-    Reader::REDO_CODE ReaderUdev::redoOpen() {
+    Reader::REDO_CODE ReaderASMBlockDevice::redoOpen() {
         try {
             blockSize = 0;
 
@@ -351,7 +351,7 @@ namespace OpenLogReplicator {
             uint32_t parsedFileNumber = 0;
             const bool haveFileNumber = parseAsmFileNumber(fileNameOnly, parsedFileNumber);
 
-            ctx->info(0, "[ReaderUdev] Parsed diskGroupName='" + diskGroupName + "', filePath='" + filePath +
+            ctx->info(0, "[ReaderASMBlockDevice] Parsed diskGroupName='" + diskGroupName + "', filePath='" + filePath +
                      "', fileNameOnly='" + fileNameOnly + "', fileNumber=" +
                      (haveFileNumber ? std::to_string(parsedFileNumber) : std::string("(alias)")));
 
@@ -362,7 +362,7 @@ namespace OpenLogReplicator {
 
             // Get file attributes, group_number and file_number in one query
             {
-                ctx->info(0, "[ReaderUdev] Querying ASM metadata for: " + fileName);
+                ctx->info(0, "[ReaderASMBlockDevice] Querying ASM metadata for: " + fileName);
                 DatabaseStatement stmt(replicatorOnlineAsm->connASMMeta);
                 if (haveFileNumber) {
                     stmt.createStatement(SQL_QUERY_ASM_METADATA_BY_FILENUM);
@@ -391,7 +391,7 @@ namespace OpenLogReplicator {
                     return REDO_CODE::ERROR;
                 }
                 fileType = std::string(fileTypeBuf);
-                ctx->info(0, "[ReaderUdev] ASM metadata query OK, type=" + fileType +
+                ctx->info(0, "[ReaderASMBlockDevice] ASM metadata query OK, type=" + fileType +
                          ", blocks=" + std::to_string(fileSizeRaw) +
                          ", au_size=" + std::to_string(auSize) +
                          ", group_number=" + std::to_string(groupNumber) +
@@ -420,7 +420,7 @@ namespace OpenLogReplicator {
             if (Reader::reloadHeaderRead() != REDO_CODE::OK)
                 return REDO_CODE::ERROR;
 
-            ctx->info(0, "[ReaderUdev] redoOpen " + fileName + " complete: fileSize=" + std::to_string(fileSize) +
+            ctx->info(0, "[ReaderASMBlockDevice] redoOpen " + fileName + " complete: fileSize=" + std::to_string(fileSize) +
                      " (" + std::to_string(fileSize / 1024 / 1024) + " MB), blockSize=" + std::to_string(blockSize));
 
         } catch (RuntimeException& ex) {
@@ -431,7 +431,7 @@ namespace OpenLogReplicator {
         return REDO_CODE::OK;
     }
 
-    void ReaderUdev::fixHeaderBlock(uint8_t* buf, const uint64_t offset, const uint bytesRead) const {
+    void ReaderASMBlockDevice::fixHeaderBlock(uint8_t* buf, const uint64_t offset, const uint bytesRead) const {
         // Only fix first block of the file (offset 0 and buffer contains first 512 bytes)
         if (offset != 0 || bytesRead < 512) {
             return;
@@ -451,10 +451,10 @@ namespace OpenLogReplicator {
         // Write magic constant at offset 0x20-0x23
         memcpy(buf + 0x20, &MAGIC_XOR, 4);
 
-        ctx->info(0, "[ReaderUdev] Fixed header block for file type: " + fileType);
+        ctx->info(0, "[ReaderASMBlockDevice] Fixed header block for file type: " + fileType);
     }
 
-    int ReaderUdev::readDirect(uint8_t* buf, const uint64_t offset, uint size) {
+    int ReaderASMBlockDevice::readDirect(uint8_t* buf, const uint64_t offset, uint size) {
         // Check bounds - don't read beyond file size
         if (offset >= fileSize) {
             return 0;  // EOF
@@ -541,7 +541,7 @@ namespace OpenLogReplicator {
         return static_cast<int>(bytesRead);
     }
 
-    int ReaderUdev::redoRead(uint8_t* buf, const uint64_t offset, const uint size) {
+    int ReaderASMBlockDevice::redoRead(uint8_t* buf, const uint64_t offset, const uint size) {
         uint64_t startTime = 0;
         if (unlikely(ctx->isTraceSet(Ctx::TRACE::PERFORMANCE)))
             startTime = ctx->clock->getTimeUt();
@@ -557,7 +557,7 @@ namespace OpenLogReplicator {
         return result;
     }
 
-    uint ReaderUdev::readSize(uint prevRead) {
+    uint ReaderASMBlockDevice::readSize(uint prevRead) {
         if (prevRead < blockSize)
             return blockSize;
 
@@ -573,7 +573,7 @@ namespace OpenLogReplicator {
         return prevRead;
     }
 
-    Reader::REDO_CODE ReaderUdev::reloadHeaderRead() {
+    Reader::REDO_CODE ReaderASMBlockDevice::reloadHeaderRead() {
         const int64_t bytes = redoRead(headerBuffer + blockSize, blockSize, blockSize);
         if (bytes != blockSize) {
             ctx->error(46666, "unable to read file " + fileName + " (got " + std::to_string(bytes) + " bytes, expected " + std::to_string(blockSize) + ")");
@@ -584,7 +584,7 @@ namespace OpenLogReplicator {
         return REDO_CODE::OK;
     }
 
-    void ReaderUdev::showHint(Thread* t, std::string origPath, std::string mappedPath) const {
+    void ReaderASMBlockDevice::showHint(Thread* t, std::string origPath, std::string mappedPath) const {
         ctx->hint("check ASM disk access, failed to read: " + origPath +
                   " - ensure OpenLogReplicator has access to ASM disks");
     }

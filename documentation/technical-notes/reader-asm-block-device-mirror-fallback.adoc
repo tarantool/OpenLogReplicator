@@ -1,6 +1,6 @@
-= ReaderUdev: fallback на mirror-копии ASM
+= ReaderASMBlockDevice: fallback на mirror-копии ASM
 
-`ReaderUdev` читает redo-логи через прямой доступ к блочным устройствам ASM.
+`ReaderASMBlockDevice` читает redo-логи через прямой доступ к блочным устройствам ASM.
 Для NORMAL/HIGH redundancy диксгрупов Oracle хранит несколько копий каждого экстента
 (`lxn_kffxp = 0` - primary, `1..N` - mirror). Ридер использует их как резерв на случай
 ошибки чтения primary-копии.
@@ -149,9 +149,9 @@ mkdir -p ../checkpoint
 Ожидаемые строки в логе для файла на mirror-диксгрупе:
 
 ----
-[ReaderUdev] Loading extent map for group_number=3, file_number=256
+[ReaderASMBlockDevice] Loading extent map for group_number=3, file_number=256
 Loaded 51 extents for +DATA_MIRROR/ORCL/ONLINELOG/group_11.256.1237625879
-[ReaderUdev] v$asm_disk loaded 2 disks
+[ReaderASMBlockDevice] v$asm_disk loaded 2 disks
 Opened disk 0 at /dev/loop10
 Opened disk 1 at /dev/loop11
 processing redo log: group: 11 ... path: +DATA_MIRROR/ORCL/ONLINELOG/group_11.256.1237625879

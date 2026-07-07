@@ -7,7 +7,7 @@ flowchart LR
     subgraph Sources["📥 Источники данных"]
         FS["💾 Файловая система<br/>Архивные / Online логи"]
         ASM["🗃️ Oracle ASM<br/>dbms_diskgroup"]
-        Udev["🔌 Блочные устройства<br/>/dev/sdX + extent map"]
+        ASMBlockDevice["🔌 Блочные устройства<br/>/dev/sdX + extent map"]
     end
 
     subgraph ReaderLayer["📖 Reader (Thread)"]
@@ -43,7 +43,7 @@ flowchart LR
 
     FS --> R
     ASM --> R
-    Udev --> R
+    ASMBlockDevice --> R
     R -->|" redoBufferList<br/>блоки по blockSize "| P
     P --> LWN
     LWN --> OC

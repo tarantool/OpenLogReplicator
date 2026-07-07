@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 This is a **VK fork** of OpenLogReplicator - an open-source Oracle CDC (Change Data Capture) solution written in C++17. It reads Oracle redo log files and streams changes in JSON or Protobuf format to targets (Kafka, file, network, ZeroMQ).
 
 The fork adds:
-- **ASM support** (`reader/ReaderASM.cpp`, `reader/ReaderUdev.cpp`) - direct reading from Oracle ASM storage
+- **ASM support** (`reader/ReaderASM.cpp`, `reader/ReaderASMBlockDevice.cpp`) - direct reading from Oracle ASM storage
 - **Solaris SPARC64 cross-compilation** support
 - **OS thread naming** for debugging (`pthread_setname_np`)
 - **Hybrid archivelog reading** (ASM or filesystem)
@@ -76,7 +76,7 @@ This repo is typically built via the parent `openlogreplicator-docker-vk` reposi
 OpenLogReplicator uses a multi-threaded pipeline architecture. The main components are created in `OpenLogReplicator::run()`:
 
 ```
-Reader (ASM/Filesystem/Udev)  -->  Parser  -->  Builder (JSON/Protobuf)  -->  Writer (Kafka/File/Stream/Discard)
+Reader (ASM/Filesystem/ASMBlockDevice)  -->  Parser  -->  Builder (JSON/Protobuf)  -->  Writer (Kafka/File/Stream/Discard)
                                       ^
                                       |
 Replicator (Online/Batch)  -->  Metadata  -->  State (Disk)
@@ -92,7 +92,7 @@ Replicator (Online/Batch)  -->  Metadata  -->  State (Disk)
 **Reader** (`reader/Reader.h`) - reads redo log blocks. Implementations:
 - `ReaderFilesystem` - local filesystem redo logs
 - `ReaderASM` - reads from ASM via Oracle OCI connection
-- `ReaderUdev` - direct block device access for ASM disks
+- `ReaderASMBlockDevice` - direct block device access for ASM disks
 
 **Parser** (`parser/Parser.h`) - parses Oracle redo log records (opcodes), reconstructs transactions. Core of CDC logic. Uses `TransactionBuffer` for managing in-flight transactions.
 

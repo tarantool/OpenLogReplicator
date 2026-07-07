@@ -1,4 +1,4 @@
-// Standalone unit test for ReaderUdev's ASM file-number parsing.
+// Standalone unit test for ReaderASMBlockDevice's ASM file-number parsing.
 //
 // Run (from repo root):
 //   g++ -std=c++17 -fsanitize=address,undefined \

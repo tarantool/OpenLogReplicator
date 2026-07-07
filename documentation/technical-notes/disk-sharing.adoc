@@ -6,7 +6,7 @@ OLR читает redo только на чтение (`O_RDONLY`), не пише
 . *Один диск - несколько инстансов OLR* (на одном хосте).
 . *Диски источника - на другом сервере* (cross-server, режим `asm-udev`).
 
-Общий риск для обоих: `ReaderUdev` грузит extent map один раз при открытии файла и не
+Общий риск для обоих: `ReaderASMBlockDevice` грузит extent map один раз при открытии файла и не
 перечитывает. При активном ASM rebalance физические AU перемещаются и extent map устаревает.
 
 == Раздел 1. Шаринг одного диска между несколькими инстансами OLR
@@ -224,7 +224,7 @@ OpenLogReplicator -f olr.json
 
 [source]
 ----
-[ReaderUdev] Loaded 51 extents for +DATA/.../group_...   # extent map с VM-A
+[ReaderASMBlockDevice] Loaded 51 extents for +DATA/.../group_...   # extent map с VM-A
 Opened disk 1 at /dev/oracleasm/disks/DATA1              # открыт проброшенный диск
 TRACE DISK reading#1 +DATA/.../group_2.263 ... got: 512  # блоки читаются
 ----

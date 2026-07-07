@@ -35,14 +35,14 @@ namespace OpenLogReplicator {
         Reader* readerCreate(int group) override;
 
         /**
-         * @brief Flag to use direct block device access via ReaderUdev instead of ReaderASM.
+         * @brief Flag to use direct block device access via ReaderASMBlockDevice instead of ReaderASM.
          *
-         * When true, the replicator will create ReaderUdev instances that bypass
+         * When true, the replicator will create ReaderASMBlockDevice instances that bypass
          * the ASM instance and read directly from underlying block devices using
          * extent mapping. This can provide better performance and independence
          * from ASM instance load, but requires appropriate OS-level permissions.
          */
-        bool useUdev;
+        bool useASMBlockDevice;
 
         bool getArchivelogFromFS;
 
@@ -54,7 +54,7 @@ namespace OpenLogReplicator {
          *
          * Separate connection used for querying ASM metadata views and tables
          * (v$asm_diskgroup, v$asm_disk, v$asm_file, x$kffxp, etc.). This allows
-         * ReaderUdev to query extent mappings without interfering with ongoing
+         * ReaderASMBlockDevice to query extent mappings without interfering with ongoing
          * I/O operations on the primary connection. Thread-safe access is
          * protected by connASMMetaMutex.
          */
@@ -64,7 +64,7 @@ namespace OpenLogReplicator {
          * @brief Mutex protecting thread-safe access to connASMMeta.
          *
          * OCI database connections are not thread-safe. This mutex ensures that
-         * ReaderUdev can safely execute metadata queries from its own thread
+         * ReaderASMBlockDevice can safely execute metadata queries from its own thread
          * without conflicting with other operations.
          */
         std::mutex connASMMetaMutex;
@@ -74,7 +74,7 @@ namespace OpenLogReplicator {
                             std::string newDatabase, std::string newUser, std::string newPassword,
                             std::string newConnectString, bool newKeepConnection, std::string userASM,
                             std::string passwdASM, std::string connectStringASM, bool getArchivelogFromFS,
-                            bool newUseUdev = false);
+                            bool newUseASMBlockDevice = false);
 
 
         ~ReplicatorOnlineASM() override;

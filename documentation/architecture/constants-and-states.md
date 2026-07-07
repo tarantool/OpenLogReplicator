@@ -354,7 +354,7 @@ graph TB
 | `FLAGS_CLOSEDTHREAD`   | 0x1000   | Закрытый поток архивирования      |
 | `FLAGS_MAXPERFORMANCE` | 0x2000   | Max performance mode              |
 
-### ReaderUdev
+### ReaderASMBlockDevice
 
 | Константа       | Значение        | Описание                                |
 |-----------------|-----------------|-----------------------------------------|

@@ -24,7 +24,7 @@ along with OpenLogReplicator; see the file LICENSE;  If not see
 #include <utility>
 #include <string>
 #include "../reader/ReaderASM.h"
-#include "../reader/ReaderUdev.h"
+#include "../reader/ReaderASMBlockDevice.h"
 #include "../reader/ReaderFilesystem.h"
 #include "../metadata/Metadata.h"
 #include "../metadata/RedoLog.h"
@@ -39,11 +39,11 @@ namespace OpenLogReplicator {
                                              std::string newDatabase, std::string newUser,
                                              std::string newPassword, std::string newConnectString,
                                              bool newKeepConnection, std::string userASM, std::string passwdASM,
-                                             std::string connectStringASM, bool getArchivelogFromFS, bool newUseUdev) :
+                                             std::string connectStringASM, bool getArchivelogFromFS, bool newUseASMBlockDevice) :
     ReplicatorOnline(newCtx, newArchGetLog, newBuilder, newMetadata, newTransactionBuffer,
         std::move(newAlias), std::move(newDatabase), std::move(newUser),
         std::move(newPassword), std::move(newConnectString), newKeepConnection),
-    useUdev(newUseUdev), getArchivelogFromFS(getArchivelogFromFS) {
+    useASMBlockDevice(newUseASMBlockDevice), getArchivelogFromFS(getArchivelogFromFS) {
         connASM = new DatabaseConnection(env, userASM, passwdASM, connectStringASM, true);
         connASMMeta = new DatabaseConnection(env, userASM, passwdASM, connectStringASM, true);
     }
@@ -79,7 +79,7 @@ namespace OpenLogReplicator {
                 }
             }
 
-            // Connect metadata connection separately (for ReaderUdev)
+            // Connect metadata connection separately (for ReaderASMBlockDevice)
             if (!connASMMeta->connected) {
                 try {
                     connASMMeta->connect();
@@ -139,8 +139,8 @@ namespace OpenLogReplicator {
             reader = new ReaderFilesystem(ctx, alias + "-reader-" + std::to_string(group), database, group,
                                    metadata->dbBlockChecksum != "OFF" && metadata->dbBlockChecksum != "FALSE");
         } else {
-            if (useUdev) {
-                reader = new ReaderUdev(ctx, alias + "-reader-" + std::to_string(group), this, database, group,
+            if (useASMBlockDevice) {
+                reader = new ReaderASMBlockDevice(ctx, alias + "-reader-" + std::to_string(group), this, database, group,
                                                    metadata->dbBlockChecksum != "OFF" && metadata->dbBlockChecksum != "FALSE");
             } else {
                 reader = new ReaderASM(ctx, alias + "-reader-" + std::to_string(group), this, database, group,
@@ -156,7 +156,7 @@ namespace OpenLogReplicator {
     }
 
     std::string ReplicatorOnlineASM::getModeName() const {
-        if (useUdev) {
+        if (useASMBlockDevice) {
             return {"ASM-UDEV"};
         }
         return {"ASM"};
