@@ -43,7 +43,7 @@ namespace OpenLogReplicator {
         std::string name = thread->getName();
         if (name.length() > 15)
             name = name.substr(0, 15);
-#if __linux__
+#if defined(__linux__) || defined(__sun)
         pthread_setname_np(thread->pthread, name.c_str());
 #endif
 #if __APPLE__

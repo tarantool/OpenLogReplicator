@@ -152,7 +152,7 @@ namespace {
 
                 if (i + 1 < argc && (arg == "-p" || arg == "--process")) {
                     // Custom process name
-#if __linux__
+#if defined(__linux__) || defined(__sun)
                     pthread_setname_np(pthread_self(), argv[i + 1]);
 #endif
 #if __APPLE__
