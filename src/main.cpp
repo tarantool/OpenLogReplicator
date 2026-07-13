@@ -101,7 +101,8 @@ namespace {
     int mainFunction(int argc, char** argv) {
         int ret = 1;
         struct utsname name{};
-        int unameRet = uname(&name);
+        if (uname(&name) == -1)
+            exit(-1);
         std::string buildArch;
         if (strlen(OpenLogReplicator_CMAKE_BUILD_TIMESTAMP) > 0)
             buildArch = ", build-arch: " OpenLogReplicator_CPU_ARCH;
@@ -109,11 +110,8 @@ namespace {
         mainCtx->welcome("OpenLogReplicator VK v" + std::to_string(OpenLogReplicator_VERSION_MAJOR) + "." +
                 std::to_string(OpenLogReplicator_VERSION_MINOR) + "." + std::to_string(OpenLogReplicator_VERSION_PATCH) +
                 " (C) 2025-2026 by VK Tech based on Adam Leszczynski solution, see LICENSE file for licensing information");
-        std::string archStr = (unameRet == 0) ? name.machine : "unknown";
-        std::string sysStr = (unameRet == 0) ? name.sysname : "unknown";
-        std::string relStr = (unameRet == 0) ? name.release : "unknown";
-        mainCtx->welcome("arch: " + archStr + buildArch + ", system: " + sysStr +
-                ", release: " + relStr + ", build: " +
+        mainCtx->welcome("arch: " + std::string(name.machine) + buildArch + ", system: " + name.sysname +
+                ", release: " + std::string(name.release) + ", build: " +
                 OpenLogReplicator_CMAKE_BUILD_TYPE + ", compiled: " + OpenLogReplicator_CMAKE_BUILD_TIMESTAMP + ", modules:"
                 HAS_KAFKA HAS_OCI HAS_PROMETHEUS HAS_PROTOBUF HAS_ZEROMQ HAS_STATIC HAS_THREAD_INFO);
 
