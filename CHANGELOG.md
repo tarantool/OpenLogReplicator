@@ -1,4 +1,4 @@
-# Changelog openlogreplicator-vk
+# Changelog OpenLogReplicator fork
 
 Все изменения в форке относительно upstream (bersler/OpenLogReplicator).
 

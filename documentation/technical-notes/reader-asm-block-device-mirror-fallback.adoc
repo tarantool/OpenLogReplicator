@@ -116,11 +116,11 @@ SELECT group#, status FROM v$log;
     "flags": 4096,
     "reader": {
       "type": "asm-udev",
-      "user": "dbzuser",
-      "password": "dbz",
+      "user": "<database-user>",
+      "password": "<database-password>",
       "server": "//localhost:1521/ORCL",
-      "user-asm": "sys",
-      "password-asm": "<sys-password>",
+      "user-asm": "<asm-user>",
+      "password-asm": "<asm-password>",
       "server-asm": "//localhost:1521/+ASM"
     },
     "state": { "type": "disk", "path": "../checkpoint" },

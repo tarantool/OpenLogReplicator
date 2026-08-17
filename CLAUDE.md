@@ -62,12 +62,40 @@ make -j$(nproc)
 - `CPU_ARCH=native` - target architecture optimization
 - `THREAD_INFO=ON` - enable thread info logging
 
-### Docker Build (Parent Repository)
+### Docker Build
 
-This repo is typically built via the parent `openlogreplicator-docker-vk` repository:
-- `../build-dev.sh` - builds debug Docker image
-- `../build-prod.sh` - builds release Docker image (no cache)
-- Both scripts clone/checkout this repo as a submodule and build inside Docker
+#### External development
+
+Docker build files for external contributors are maintained in the public
+[`tarantool/openlogreplicator-docker`](https://github.com/tarantool/openlogreplicator-docker)
+repository. Check it out next to this repository. The Makefile defaults produce
+the corresponding local build command:
+
+```bash
+make help
+```
+
+The public defaults use `../openlogreplicator-docker`,
+`ghcr.io/tarantool/openlogreplicator-base:latest`, and the local image tag
+`openlogreplicator-test:local`.
+
+#### Internal Tarantool development
+
+Internal builds use the GitLab project
+`tarantool/cdc/v9/openlogreplicator-docker-vk`, normally checked out as the
+sibling directory `../openlogreplicator-docker-vk`. Override the Makefile
+variables to select the internal base image and local tag:
+
+```bash
+make help \
+  OLR_DOCKER_REPO=../openlogreplicator-docker-vk \
+  OLR_BASE_IMAGE=<internal-registry>/<base-image>:<tag> \
+  OLR_TEST_IMAGE=olr-test:local
+```
+
+The internal Docker repository provides `build-dev.sh` for debug images and
+`build-prod.sh` for release images. Both scripts check out this repository as a
+submodule and perform the build inside Docker.
 
 ## Architecture
 
@@ -151,10 +179,15 @@ or signals are silently dropped and incremental snapshots fail with
 
 ## Testing
 
-There is **no automated test suite in this repository**. The upstream project relies on a private regression suite. For local validation:
-- Use `WriterDiscard` for smoke testing startup
-- Use `-v/--version` to verify binary compilation
-- Check `scripts/` for example configurations
+Regression tests are available under `tests/` and run inside the Docker test
+image. See [`tests/README.md`](tests/README.md) for prerequisites and image build
+instructions. To run the complete suite for a supported Oracle environment:
+
+```bash
+make test ORACLE_TARGET=xe-21
+# or
+make test ORACLE_TARGET=free-23
+```
 
 ## Code Style
 

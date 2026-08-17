@@ -199,12 +199,12 @@ sudo usermod -aG asmadmin <пользователь-OLR>   # перезайти 
 ----
 "reader": {
   "type": "asm-udev",
-  "user": "dbzuser",
-  "password": "...",
-  "server":     "//10.0.0.91:1521/orcl",
-  "user-asm": "sys",
-  "password-asm": "...",
-  "server-asm": "//10.0.0.91:1521/+ASM"
+  "user": "<database-user>",
+  "password": "<database-password>",
+  "server":     "//<source-host>:1521/orcl",
+  "user-asm": "<asm-user>",
+  "password-asm": "<asm-password>",
+  "server-asm": "//<source-host>:1521/+ASM"
 }
 ----
 

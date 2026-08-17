@@ -176,8 +176,8 @@ Splitting assumes the transaction is committed; partial or rolled-back operation
   "reader": {
     "type": "online",
     "server": "//dbhost:1521/ORCL",
-    "user": "olr",
-    "password": "secret",
+    "user": "<database-user>",
+    "password": "<database-password>",
     "path-mapping": ["/db/fra", "/opt/fast-recovery-area"],
     "format": { "type": "json" },
     "state": { "type": "disk", "path": "checkpoint" }

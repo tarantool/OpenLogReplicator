@@ -123,8 +123,8 @@ Enable higher verbosity only when diagnosing specific issues.
       "name": "DBNAME",
       "reader": {
         "type": "online",
-        "user": "user1",
-        "password": "Password1",
+        "user": "<database-user>",
+        "password": "<database-password>",
         "server": "//host:1521/SERVICE"
       },
       "format": {

@@ -1,13 +1,6 @@
-# VK Fork of OpenLogReplicator
+# OpenLogReplicator
 
-## 📋 **[Changelog форка](CHANGELOG.vk.md)** — список изменений и breaking changes
-
-## Pipeline of work with original OpenLogReplicator
-
-![pipeline_of_fork.png](documentation/images/pipeline_of_fork.png)
-
-Since 1.9.0 we use this schema:
-![pipeline_of_fork.png](documentation/images/pipeline_since_1_9_0.png)
+## 📋 **[Changelog форка](CHANGELOG.md)** — список изменений и breaking changes
 
 
 -----

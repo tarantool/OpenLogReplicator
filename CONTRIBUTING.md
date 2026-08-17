@@ -1,5 +1,8 @@
 First off, thanks for taking the time to contribute! ❤️
 
+Maintainers accepting a GitHub pull request into the internal repository should
+follow [`CONTRIBUTE.md`](CONTRIBUTE.md).
+
 The most valuable contribution to this project is your help with making the redo log parser better.
 To achieve this goal we need your help in verification of the work.
 

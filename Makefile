@@ -1,6 +1,9 @@
 # Variables:
 #   ORACLE_TARGET     — Oracle environment: xe-21 | free-23 (default: free-23)
 #   TESTGEN_TIMEOUT   — per-scenario timeout in seconds (default: 300)
+#   OLR_DOCKER_REPO   — sibling Docker repository (default: ../openlogreplicator-docker)
+#   OLR_BASE_IMAGE    — base image used to build the test image
+#   OLR_TEST_IMAGE    — resulting local test image tag
 #
 # Examples:
 #   make test ORACLE_TARGET=xe-21          # Full flow: up + testgen + down
@@ -15,6 +18,9 @@ ORACLE_TARGET ?= free-23
 ENV_DIR := $(TESTS_DIR)/1-environments/$(ORACLE_TARGET)
 
 OLR_BIN ?= /opt/OpenLogReplicator/OpenLogReplicator
+OLR_DOCKER_REPO ?= ../openlogreplicator-docker
+OLR_BASE_IMAGE ?= ghcr.io/tarantool/openlogreplicator-base:latest
+OLR_TEST_IMAGE ?= openlogreplicator-test:local
 
 # Colors for output
 BLUE := \033[36m
@@ -57,16 +63,19 @@ help:
 	@echo "  make down     ORACLE_TARGET=xe-21   Stop oracle + remove volumes"
 	@echo ""
 	@echo "$(YELLOW)Building the Docker image:$(RESET)"
-	@echo "  The olr-test image is built by the openlogreplicator-docker-vk repo"
+	@echo "  The olr-test image is built by $(OLR_DOCKER_REPO)"
 	@echo "  (Dockerfile, with --build-arg WITHTESTS=1). For local CI runs:"
-	@echo "    cd ../openlogreplicator-docker-vk && \\"
+	@echo "    cd $(OLR_DOCKER_REPO) && \\"
 	@echo "    docker build -f Dockerfile --build-arg WITHTESTS=1 \\"
-	@echo "                 --build-arg BASE_IMAGE=<vk-base-tag> \\"
-	@echo "                 -t olr-test:local ."
+	@echo "                 --build-arg BASE_IMAGE=$(OLR_BASE_IMAGE) \\"
+	@echo "                 -t $(OLR_TEST_IMAGE) ."
+	@echo ""
+	@echo "  Override OLR_DOCKER_REPO, OLR_BASE_IMAGE, and OLR_TEST_IMAGE"
+	@echo "  to use the internal Tarantool repositories and registry."
 	@echo ""
 
 # ----------------------------------------------------------------------------
-# Test targets — run INSIDE the olr-test image (built by docker-vk).
+# Test targets — run INSIDE the olr-test image (built by docker).
 # The flow:
 #   1. spins up the oracle container via `docker compose up -d --wait`,
 #   2. runs `generate.sh` to produce + validate fixtures (sqlplus + cp via
