@@ -21,6 +21,7 @@ If not, see <http://www.gnu.org/licenses/>. */
 #define BUILDER_JSON_H_
 
 #include "Builder.h"
+#include "JsonEscape.h"
 #include "../common/DbColumn.h"
 #include "../common/DbTable.h"
 #include "../common/table/SysCol.h"
@@ -532,12 +533,15 @@ namespace OpenLogReplicator {
 
         template<bool fast = false>
         void appendHex2(uint8_t value) {
+            char digits[2];
+            Data::map16x2(value, digits);
+
             if (likely(fast || lastBuilderSize + messagePosition + 2 < OUTPUT_BUFFER_DATA_SIZE)) {
-                append<true>(Data::map16((value >> 4) & 0xF));
-                append<true>(Data::map16(value & 0xF));
+                append<true>(digits[0]);
+                append<true>(digits[1]);
             } else {
-                append(Data::map16((value >> 4) & 0xF));
-                append(Data::map16(value & 0xF));
+                append(digits[0]);
+                append(digits[1]);
             }
         }
 
@@ -769,69 +773,20 @@ namespace OpenLogReplicator {
 
         template<bool fast = false>
         void appendEscapeInternal(const char* str, uint64_t size) {
-            while (size > 0) {
-                switch (*str) {
-                    case '\t':
-                        append<fast>(std::string_view("\\t"));
-                        break;
-                    case '\r':
-                        append<fast>(std::string_view("\\r"));
-                        break;
-                    case '\n':
-                        append<fast>(std::string_view("\\n"));
-                        break;
-                    case '\f':
-                        append<fast>(std::string_view("\\f"));
-                        break;
-                    case '\b':
-                        append<fast>(std::string_view("\\b"));
-                        break;
-                    case 0:
-                    case 1:
-                    case 2:
-                    case 3:
-                    case 4:
-                    case 5:
-                    case 6:
-                    case 7:
-                    //case 8:  // \b
-                    //case 9:  // \t
-                    //case 10: // \n
-                    case 11:
-                    //case 12: // \f
-                    //case 13: // \r
-                    case 14:
-                    case 15:
-                    case 16:
-                    case 17:
-                    case 18:
-                    case 19:
-                    case 20:
-                    case 21:
-                    case 22:
-                    case 23:
-                    case 24:
-                    case 25:
-                    case 26:
-                    case 27:
-                    case 28:
-                    case 29:
-                    case 30:
-                        append<fast>(std::string_view("\\u00"));
-                        appendDecN<2, fast>(*str);
-                        break;
-                    case '"':
-                    case '\\':
-                    case '/':
-                        append<fast>('\\');
-                        append<fast>(*str);
-                        break;
-                    default:
-                        append<fast>(*str);
+            struct Sink {
+                BuilderJson* builder;
+
+                void character(char value) {
+                    builder->append<fast>(value);
                 }
-                ++str;
-                --size;
-            }
+
+                void text(const char* data, uint64_t size) {
+                    builder->append<fast>(std::string_view(data, size));
+                }
+            };
+
+            Sink sink{this};
+            jsonEscapeTo(str, size, sink);
         }
 
         void appendAfter(LobCtx* lobCtx, const XmlCtx* xmlCtx, const DbTable* table, FileOffset fileOffset) {

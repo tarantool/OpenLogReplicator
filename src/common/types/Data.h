@@ -65,6 +65,12 @@ namespace OpenLogReplicator {
             return static_cast<char>('a' + (x - 10));
         }
 
+        // Both hexadecimal digits of a byte, high nibble first.
+        static void map16x2(uint8_t value, char* out) {
+            out[0] = map16((value >> 4) & 0xF);
+            out[1] = map16(value & 0xF);
+        }
+
         static char map16U(uint x) {
             if (x < 10)
                 return static_cast<char>('0' + x);

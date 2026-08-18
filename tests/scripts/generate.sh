@@ -25,6 +25,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TESTS_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 PROJECT_ROOT="$(cd "$TESTS_DIR/.." && pwd)"
 
+# OLR rejects a config whose version differs from the schema version it was built with, so read
+# it from the build instead of pinning it here.
+SCHEMA_VERSION="$(sed -n 's/^set(SCHEMA_VERSION "\(.*\)")$/\1/p' "$PROJECT_ROOT/CMakeLists.txt")"
+if [[ -z "$SCHEMA_VERSION" ]]; then
+    echo "generate.sh: cannot read SCHEMA_VERSION from $PROJECT_ROOT/CMakeLists.txt" >&2
+    exit 1
+fi
+
 # Oracle target environment (default: free-23)
 ORACLE_TARGET="${ORACLE_TARGET:-free-23}"
 ENV_DIR="$TESTS_DIR/1-environments/$ORACLE_TARGET"
@@ -450,7 +458,7 @@ OLR_OUTPUT="$WORK_DIR/olr_output.json"
 
 cat > "$WORK_DIR/olr_config.json" <<EOF
 {
-  "version": "1.9.0",
+  "version": "$SCHEMA_VERSION",
   "log-level": 3,
   "memory": {
     "min-mb": 32,
