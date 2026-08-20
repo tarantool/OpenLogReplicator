@@ -54,7 +54,7 @@ git push -u origin community/pr-<pr-number>
 
 Для OpenLogReplicator-docker используется тот же процесс, но PR получается из
 `https://github.com/tarantool/OpenLogReplicator-docker.git` и отправляется во
-внутренний репозиторий `openlogreplicator-docker-vk`.
+внутренний репозиторий.
 
 Если PR нельзя перенести целиком, допустимо применить отдельные коммиты или
 набор изменений. В этом случае в итоговом коммите сохраняется автор исходного

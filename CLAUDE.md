@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository Overview
 
-This is a **VK fork** of OpenLogReplicator - an open-source Oracle CDC (Change Data Capture) solution written in C++17. It reads Oracle redo log files and streams changes in JSON or Protobuf format to targets (Kafka, file, network, ZeroMQ).
+This is a **fork** of OpenLogReplicator - an open-source Oracle CDC (Change Data Capture) solution written in C++17. It reads Oracle redo log files and streams changes in JSON or Protobuf format to targets (Kafka, file, network, ZeroMQ).
 
 The fork adds:
 - **ASM support** (`reader/ReaderASM.cpp`, `reader/ReaderASMBlockDevice.cpp`) - direct reading from Oracle ASM storage
@@ -88,7 +88,7 @@ variables to select the internal base image and local tag:
 
 ```bash
 make help \
-  OLR_DOCKER_REPO=../openlogreplicator-docker-vk \
+  OLR_DOCKER_REPO=../openlogreplicator-docker \
   OLR_BASE_IMAGE=<internal-registry>/<base-image>:<tag> \
   OLR_TEST_IMAGE=olr-test:local
 ```

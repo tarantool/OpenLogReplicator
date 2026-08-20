@@ -3,8 +3,11 @@ stages:
   - release
 
 # ----------------------------------------------------------------------------
-# Dev image build + unit/regression tests run downstream in openlogreplicator-docker-vk
+# Dev image build + unit/regression tests run in the downstream Docker project.
 # (this project has no runners of its own; unit tests run inside the built dev image).
+# Required CI/CD variables:
+#   OLR_DOCKER_CI_PROJECT — downstream project path
+#   OLR_DOCKER_CI_BRANCH  — downstream branch
 # ----------------------------------------------------------------------------
 trigger docker dev with tests:
   stage: build-and-test
@@ -24,9 +27,9 @@ trigger docker dev with tests:
         - cmake/**/*
         - Makefile
   trigger:
-    project: tarantool/cdc/v9/openlogreplicator-docker-vk
+    project: $OLR_DOCKER_CI_PROJECT
     strategy: depend
-    branch: vk
+    branch: $OLR_DOCKER_CI_BRANCH
   variables:
     OLR_BRANCH: ${CI_COMMIT_REF_NAME}
     BUILD_TYPE: dev
@@ -40,9 +43,9 @@ trigger docker prod build:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push"'
       when: always
   trigger:
-    project: tarantool/cdc/v9/openlogreplicator-docker-vk
+    project: $OLR_DOCKER_CI_PROJECT
     strategy: depend
-    branch: vk
+    branch: $OLR_DOCKER_CI_BRANCH
   variables:
     OLR_BRANCH: ${CI_COMMIT_REF_NAME}
     BUILD_TYPE: prod

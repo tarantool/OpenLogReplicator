@@ -107,9 +107,9 @@ namespace {
         if (strlen(OpenLogReplicator_CMAKE_BUILD_TIMESTAMP) > 0)
             buildArch = ", build-arch: " OpenLogReplicator_CPU_ARCH;
 
-        mainCtx->welcome("OpenLogReplicator VK v" + std::to_string(OpenLogReplicator_VERSION_MAJOR) + "." +
+        mainCtx->welcome("OpenLogReplicator Tarantool v" + std::to_string(OpenLogReplicator_VERSION_MAJOR) + "." +
                 std::to_string(OpenLogReplicator_VERSION_MINOR) + "." + std::to_string(OpenLogReplicator_VERSION_PATCH) +
-                " (C) 2025-2026 by VK Tech based on Adam Leszczynski solution, see LICENSE file for licensing information");
+                " (C) 2025-2026 by Tarantool based on Adam Leszczynski solution, see LICENSE file for licensing information");
         mainCtx->welcome("arch: " + std::string(name.machine) + buildArch + ", system: " + name.sysname +
                 ", release: " + std::string(name.release) + ", build: " +
                 OpenLogReplicator_CMAKE_BUILD_TYPE + ", compiled: " + OpenLogReplicator_CMAKE_BUILD_TIMESTAMP + ", modules:"
