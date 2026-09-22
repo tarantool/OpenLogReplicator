@@ -1,0 +1,38 @@
+# CODEOWNERS — владельцы критичных зон кода
+#
+# Синтаксис: <glob> <@username ...>. Побеждает ПОСЛЕДНЕЕ совпавшее правило,
+# поэтому более специфичные пути идут ниже общих.
+#
+# Правило требует >=1 approve от владельца зоны и работает только при включённой
+# настройке "Require approval from code owners" на защищённых ветках (2.0.0).
+# См. https://gitlab.corp.mail.ru/tarantool/cdc/v9/tarantool-cdc/-/blob/master/docs/internal/process/code-review.md
+#
+# Владельцы назначаются явно, а не выводятся из git-истории.
+#
+# По возможности должно соблюдаться правило: два владельца на критичную зону.
+# Ревью не должно блокироваться если один из них в отпуске.
+#
+# Файл поддерживается в актуальном состоянии: при смене ответственного за
+# подсистему правится здесь же, отдельным MR.
+
+# --- CI/CD, сборка, релизный контур -------------------------------------------
+# Компрометация этой зоны затрагивает пайплайн и публикуемые артефакты.
+/.gitlab-ci.yml                 @artyom.dubinin @a.pavlyuk @nikolai.belonogov @d.kasimovsky
+/CMakeLists.txt                 @artyom.dubinin @a.pavlyuk @nikolai.belonogov
+/Makefile                       @artyom.dubinin @a.pavlyuk @nikolai.belonogov
+
+# --- Сам файл владельцев ------------------------------------------------------
+/CODEOWNERS                     @i.bannikov @artyom.dubinin @d.kasimovsky
+
+# --- Ядро: чтение и разбор redo-логов, репликация -----------------------------
+/src/                           @artyom.dubinin @a.pavlyuk @nikolai.belonogov
+
+# --- Протокол обмена с клиентами ----------------------------------------------
+/proto/                         @artyom.dubinin @a.pavlyuk @nikolai.belonogov
+
+# --- Тесты и скрипты окружения ------------------------------------------------
+/tests/                         @artyom.dubinin @a.pavlyuk @nikolai.belonogov
+/scripts/                       @artyom.dubinin @a.pavlyuk @nikolai.belonogov
+
+# --- Документация -------------------------------------------------------------
+/documentation/                 @artyom.dubinin @a.pavlyuk @nikolai.belonogov
