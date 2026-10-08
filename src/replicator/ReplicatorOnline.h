@@ -37,8 +37,9 @@ namespace OpenLogReplicator {
          * This constant defines an SQL statement used to fetch information about archived redo logs
          * from the Oracle database. It selects the log name, sequence number, first change number,
          * and next change number. The query filters logs based on a minimum sequence number,
-         * resetlogs identifier, and ensures that the log name is not null. Results are ordered by
-         * sequence number, destination ID, and recovery destination status.
+         * resetlogs identifier, and ensures that the log name is not null. Remote standby destinations
+         * (STANDBY_DEST = 'YES') are skipped, as their NAME holds a TNS descriptor, not a file path.
+         * Results are ordered by sequence number, destination ID, and recovery destination status.
          *
          * @note This query is intended for use in online replication scenarios where archived logs
          *       are required to reconstruct the redo log stream.
@@ -56,6 +57,7 @@ namespace OpenLogReplicator {
             "   SEQUENCE# >= :i"
             "   AND RESETLOGS_ID = :j"
             "   AND NAME IS NOT NULL"
+            "   AND STANDBY_DEST = 'NO'"
             " ORDER BY"
             "   SEQUENCE#"
             ",  DEST_ID"

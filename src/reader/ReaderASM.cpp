@@ -196,6 +196,8 @@ namespace OpenLogReplicator {
             std::string partialFileName;
             if (!first) {
                 size_t found = mappedPath.find_last_of("/\\");
+                if (found == std::string::npos)
+                    break;
                 partialFileName = mappedPath.substr(found + 1);
                 mappedPath.resize(found);
             }
